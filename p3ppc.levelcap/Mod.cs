@@ -6,59 +6,95 @@ using Reloaded.Mod.Interfaces;
 using p3ppc.levelcap.Template;
 using Reloaded.Hooks.ReloadedII.Interfaces;
 using p3ppc.levelcap.Configuration;
+using static p3ppc.expShare.Native;
 using Reloaded.Mod.Interfaces.Structs;
+using IReloadedHooks = Reloaded.Hooks.ReloadedII.Interfaces.IReloadedHooks;
+using p3ppc.expShare.NuGet.templates.defaultPlus;
+using p3ppc.expShare;
 
 namespace p3ppc.levelcap
-{
-    public unsafe class Mod : ModBase
+{/// <summary>
+ /// Your mod logic goes here.
+ /// </summary>
+    public unsafe class Mod : ModBase // <= Do not Remove.
     {
+        /// <summary>
+        /// Provides access to the mod loader API.
+        /// </summary>
+        private readonly IModLoader _modLoader;
+
+        /// <summary>
+        /// Provides access to the Reloaded.Hooks API.
+        /// </summary>
+        /// <remarks>This is null if you remove dependency on Reloaded.SharedLib.Hooks in your mod.</remarks>
+        private readonly IReloadedHooks? _hooks;
+
+        /// <summary>
+        /// Provides access to the Reloaded logger.
+        /// </summary>
+        private readonly ILogger _logger;
+
+        /// <summary>
+        /// Entry point into the mod, instance that created this class.
+        /// </summary>
+        private readonly IMod _owner;
+
+        /// <summary>
+        /// Provides access to this mod's configuration.
+        /// </summary>
+        private Config _configuration;
+
+        /// <summary>
+        /// The configuration of the currently executing mod.
+        /// </summary>
+        private readonly IModConfig _modConfig;
+
+        private IHook<SetupResultsExpDelegate> _setupExpHook;
+        private IHook<GivePartyMemberExpDelegate> _givePartyMemberExpHook;
+        private IHook<LevelUpPartyMemberDelegate> _levelUpPartyMemberHook;
+        private delegate int GetTotalDayDelegate();
+        private GetTotalDayDelegate _getTotalDay;
+
+        private Dictionary<PartyMember, int> _expGains = new();
+        private Dictionary<PartyMember, PersonaStatChanges> _levelUps = new();
+        private short[] _available = new short[9];
+        private int _numAvailable = 0;
+
         // Function delegates - based on actual assembly analysis
         private delegate void GiveProtagExpDelegate(IntPtr results, IntPtr param2, IntPtr param3, IntPtr param4);
-        private delegate void GivePartyMemberExpDelegate(IntPtr results, IntPtr param2, IntPtr param3, IntPtr param4);
         private delegate void GivePersonaExpDelegate(IntPtr persona, uint exp);
-        private delegate int GetTotalDayDelegate();
         private delegate IntPtr GetProtagPersonaDelegate(short slot);
         private delegate IntPtr GetPartyMemberPersonaDelegate(IntPtr partyMemberInfo);
         private delegate byte GetPersonaLevelDelegate(IntPtr persona);
         private delegate byte GetPartyMemberLevelDelegate(IntPtr partyMemberInfo);
         private delegate ushort GetNumPersonasDelegate();
+        private delegate short* GetPersonaSkillsDelegate(IntPtr persona);
 
         // Hooks
         private IHook<GiveProtagExpDelegate> _giveProtagExpHook;
-        private IHook<GivePartyMemberExpDelegate> _givePartyMemberExpHook;
         private IHook<GivePersonaExpDelegate> _givePersonaExpHook;
 
         // Function wrappers - based on actual assembly
-        private GetTotalDayDelegate _getTotalDay;
         private GetProtagPersonaDelegate _getProtagPersona;
         private GetPartyMemberPersonaDelegate _getPartyMemberPersona;
         private GetPersonaLevelDelegate _getPersonaLevel;
         private GetPartyMemberLevelDelegate _getPartyMemberLevel;
         private GetNumPersonasDelegate _getNumPersonas;
+        private GetPersonaSkillsDelegate _getPersonaSkills;
 
-        private readonly IModLoader _modLoader;
-        private readonly Reloaded.Hooks.Definitions.IReloadedHooks _hooks;
-        private readonly ILogger _logger;
-        private readonly IMod _owner;
-        private Config _configuration;
-        private readonly IModConfig _modConfig;
-
-        // Level cap configuration based on dates (day value -> max level)
-        // Updated to use correct date progression
-        private readonly SortedDictionary<int, int> _levelCaps = new SortedDictionary<int, int>
+        private SortedDictionary<int, int> _levelCaps => new SortedDictionary<int, int>
         {
-            { 0x26, 8 },   // May 9th
-            { 0x44, 15 },   // June 8th
-            { 0x61, 21 },   // July 7th 
-            { 0x79, 32 },  // August 6th
-            { 0x9d, 40 },  // September 5th
-            { 0x8F, 46 },  // October 4th
-            { 0xE1, 54 },  // November 3rd
-            { 0xF4, 54 },  // November 22nd
-            { 0x131, 76 }   // July 31st
+            { 0x26, _configuration.May9Cap },
+            { 0x44, _configuration.June8Cap },
+            { 0x61, _configuration.July7Cap },
+            { 0x79, _configuration.Aug6Cap },
+            { 0x8F, _configuration.Sep5Cap },
+            { 0x9D, _configuration.Oct4Cap },
+            { 0xE1, _configuration.Nov3Cap },
+            { 0xF4, _configuration.Nov22Cap },
+            { 0x131, _configuration.January31Cap }
         };
 
-        // Track if we're currently giving exp to prevent infinite recursion
         private bool _isGivingExp = false;
 
         public Mod(ModContext context)
@@ -71,47 +107,21 @@ namespace p3ppc.levelcap
             _modConfig = context.ModConfig;
 
             Utils.Initialise(_logger, _configuration, _modLoader);
+            Native.Initialise(_hooks);
 
-            Utils.Initialise(_logger, _configuration, _modLoader);
-
-            InitializeHooks();
-        }
-
-        private void InitializeHooks()
-        {
-            // Hook GiveProtagExp function
-            Utils.SigScan("40 53 57 41 57 48 83 EC 20", "GiveProtagExp", address =>
+            Utils.SigScan("48 89 54 24 ?? 48 89 4C 24 ?? 53 55 56 57 41 54 41 55 48 83 EC 68", "SetupResultsExp", address =>
             {
-                _giveProtagExpHook = _hooks.CreateHook<GiveProtagExpDelegate>(GiveProtagExpHandler, address).Activate();
-                _logger.WriteLine($"Hooked GiveProtagExp at 0x{address:X}");
+                _setupExpHook = _hooks.CreateHook<SetupResultsExpDelegate>(SetupResultsExp, address).Activate();
             });
 
-            // Hook GivePartyMemberExp function
             Utils.SigScan("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 20 48 89 CF 48 8D 0D ?? ?? ?? ??", "GivePartyMemberExp", address =>
             {
-                _givePartyMemberExpHook = _hooks.CreateHook<GivePartyMemberExpDelegate>(GivePartyMemberExpHandler, address).Activate();
-                _logger.WriteLine($"Hooked GivePartyMemberExp at 0x{address:X}");
+                _givePartyMemberExpHook = _hooks.CreateHook<GivePartyMemberExpDelegate>(GivePartyMemberExp, address).Activate();
             });
 
-            // Hook GivePersonaExp function - actual signature from assembly
-            Utils.SigScan("48 89 5C 24 ?? 57 48 83 EC 20 48 89 CB 89 D7 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 85 FF 79 ??", "GivePersonaExp", address =>
+            Utils.SigScan("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 81 EC B0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B E9 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B CD", "LevelUpPartyMember", address =>
             {
-                _givePersonaExpHook = _hooks.CreateHook<GivePersonaExpDelegate>(GivePersonaExpHandler, address).Activate();
-                _logger.WriteLine($"Hooked GivePersonaExp at 0x{address:X}");
-            });
-
-            // Get GetPersonaLevel function
-            Utils.SigScan("40 53 48 83 EC 20 48 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B6 43 ?? 48 83 C4 20", "GetPersonaLevel", address =>
-            {
-                _getPersonaLevel = _hooks.CreateWrapper<GetPersonaLevelDelegate>(address, out _);
-                _logger.WriteLine($"Found GetPersonaLevel at 0x{address:X}");
-            });
-
-            // Get GetPartyMemberLevel function
-            Utils.SigScan("40 53 48 83 EC 20 48 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? F6 03 04 75 ??", "GetPartyMemberLevel", address =>
-            {
-                _getPartyMemberLevel = _hooks.CreateWrapper<GetPartyMemberLevelDelegate>(address, out _);
-                _logger.WriteLine($"Found GetPartyMemberLevel at 0x{address:X}");
+                _levelUpPartyMemberHook = _hooks.CreateHook<LevelUpPartyMemberDelegate>(LevelUpPartyMember, address).Activate();
             });
 
             // Get GetTotalDay function
@@ -122,47 +132,19 @@ namespace p3ppc.levelcap
                 _logger.WriteLine($"Found GetTotalDay at 0x{funcAddress:X}");
             });
 
-            // Get GetProtagPersona function
-            Utils.SigScan("40 53 48 83 EC 20 0F B7 D9 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 66 85 DB 78 ?? E8 ?? ?? ?? ?? 0F B7 D0 0F BF C3 39 D0 7C ?? 8B 15 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? FF C2 E8 ?? ?? ?? ?? 48 0F BF C3 48 6B C8 34 48 8D 05 ?? ?? ?? ?? 48 01 C8", "GetProtagPersona", address =>
+            Utils.SigScan("40 53 48 83 EC 20 48 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 0F B6 43 ?? 48 83 C4 20", "GetPersonaLevel", address =>
             {
-                _getProtagPersona = _hooks.CreateWrapper<GetProtagPersonaDelegate>(address, out _);
-                _logger.WriteLine($"Found GetProtagPersona at 0x{address:X}");
+                _getPersonaLevel = _hooks.CreateWrapper<GetPersonaLevelDelegate>(address, out _);
+                _logger.WriteLine($"Found GetPersonaLevel at 0x{address:X}");
             });
 
-            // Get GetPartyMemberPersona function
-            Utils.SigScan("40 53 48 83 EC 20 0F B7 D9 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 66 83 FB 01 75 ?? 0F B7 0D ?? ?? ?? ??", "GetPartyMemberPersona Call", address =>
-            {
-                _getPartyMemberPersona = _hooks.CreateWrapper<GetPartyMemberPersonaDelegate>(address, out _);
-                _logger.WriteLine($"Found GetPartyMemberPersona at 0x{address:X}");
-            });
-
-            // Get GetNumPersonas function
-            Utils.SigScan("40 53 48 83 EC 20 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 31 DB E8 ?? ?? ?? ??", "GetNumPersonas", address =>
-            {
-                _getNumPersonas = _hooks.CreateWrapper<GetNumPersonasDelegate>(address, out _);
-                _logger.WriteLine($"Found GetNumPersonas at 0x{address:X}");
-            });
         }
 
         private int GetCurrentLevelCap()
         {
-            if (_getTotalDay == null)
-            {
-                _logger.WriteLine("[GetCurrentLevelCap] _getTotalDay delegate is null. Returning 99 (no cap).");
-                return 99;
-            }
-
             int currentDay = 0;
-            try
-            {
-                currentDay = _getTotalDay();
-                _logger.WriteLine($"[GetCurrentLevelCap] Current day from _getTotalDay: 0x{currentDay:X}");
-            }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[GetCurrentLevelCap] Exception calling _getTotalDay: {ex.Message}");
-                return 99;
-            }
+            currentDay = _getTotalDay();
+            _logger.WriteLine($"[GetCurrentLevelCap] Current day from _getTotalDay: 0x{currentDay:X}");
 
             int maxLevel = 1;
             foreach (var kvp in _levelCaps)
@@ -183,285 +165,326 @@ namespace p3ppc.levelcap
 
         private bool IsPersonaAtLevelCap(IntPtr persona)
         {
-            if (persona == IntPtr.Zero)
-            {
-                _logger.WriteLine("[IsPersonaAtLevelCap] persona pointer is zero");
-                return false;
-            }
-
-            if (_getPersonaLevel == null)
-            {
-                _logger.WriteLine("[IsPersonaAtLevelCap] _getPersonaLevel delegate is null");
-                return false;
-            }
-
             byte currentLevel = 0;
-            try
-            {
-                currentLevel = _getPersonaLevel(persona);
-                _logger.WriteLine($"[IsPersonaAtLevelCap] Persona current level: {currentLevel}");
-            }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[IsPersonaAtLevelCap] Exception calling _getPersonaLevel: {ex.Message}");
-                return false;
-            }
-
+            currentLevel = _getPersonaLevel(persona);
+            _logger.WriteLine($"[IsPersonaAtLevelCap] Persona current level: {currentLevel}");
             int levelCap = GetCurrentLevelCap();
             bool atCap = currentLevel >= levelCap;
             _logger.WriteLine($"[IsPersonaAtLevelCap] Level cap: {levelCap}, At cap: {atCap}");
             return atCap;
         }
 
-
         private bool IsPartyMemberAtLevelCap(IntPtr partyMemberInfo)
         {
-            if (partyMemberInfo == IntPtr.Zero)
-            {
-                _logger.WriteLine("[IsPartyMemberAtLevelCap] partyMemberInfo pointer is zero");
-                return false;
-            }
-
-            if (_getPartyMemberLevel == null)
-            {
-                _logger.WriteLine("[IsPartyMemberAtLevelCap] _getPartyMemberLevel delegate is null");
-                return false;
-            }
-
             byte currentLevel = 0;
-            try
-            {
-                currentLevel = _getPartyMemberLevel(partyMemberInfo);
-                _logger.WriteLine($"[IsPartyMemberAtLevelCap] Party member current level: {currentLevel}");
-            }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[IsPartyMemberAtLevelCap] Exception calling _getPartyMemberLevel: {ex.Message}");
-                return false;
-            }
-
+            currentLevel = _getPartyMemberLevel(partyMemberInfo);
+            _logger.WriteLine($"[IsPartyMemberAtLevelCap] Party member current level: {currentLevel}");
             int levelCap = GetCurrentLevelCap();
             bool atCap = currentLevel >= levelCap;
             _logger.WriteLine($"[IsPartyMemberAtLevelCap] Level cap: {levelCap}, At cap: {atCap}");
             return atCap;
         }
 
-        private void GiveProtagExpHandler(IntPtr results, IntPtr param2, IntPtr param3, IntPtr param4)
+        private int CalculateCappedExp(Persona* persona, int gainedExp, int levelCap)
         {
-            _logger.WriteLine("[GiveProtagExpHandler] Entered");
+            var currentLevel = persona->Level;
+            var currentExp = persona->Exp;
 
-            if (_isGivingExp)
+            if (currentLevel >= levelCap)
             {
-                _logger.WriteLine("[GiveProtagExpHandler] Recursive call detected, calling original and returning");
-                _giveProtagExpHook.OriginalFunction(results, param2, param3, param4);
-                return;
+                // Already at or above cap, no EXP gain
+                return 0;
             }
 
-            _isGivingExp = true;
+            // Calculate what the new EXP total would be
+            int newExpTotal = currentExp + gainedExp;
 
-            try
+            // Get the EXP required to reach the level cap
+            var expRequiredForCap = GetPersonaRequiredExp(persona, (ushort)levelCap);
+
+            // Safety check for GetPersonaRequiredExp returning 0
+            if (expRequiredForCap == 0 || expRequiredForCap <= currentExp)
             {
-                int levelCap = GetCurrentLevelCap();
-                int currentDay = _getTotalDay?.Invoke() ?? 0;
-                _logger.WriteLine($"[GiveProtagExpHandler] Level cap: {levelCap} (Day: 0x{currentDay:X})");
+                Utils.LogDebug($"Invalid EXP requirement detected: Required {expRequiredForCap}, Current {currentExp}. Setting gain to 0.");
+                return 0;
+            }
 
-                if (_getNumPersonas == null)
-                {
-                    _logger.WriteLine("[GiveProtagExpHandler] _getNumPersonas delegate is null, skipping persona checks");
-                }
-                else if (_getProtagPersona == null)
-                {
-                    _logger.WriteLine("[GiveProtagExpHandler] _getProtagPersona delegate is null, skipping persona checks");
-                }
-                else
-                {
-                    ushort numPersonas = _getNumPersonas();
-                    _logger.WriteLine($"[GiveProtagExpHandler] Number of protagonist personas: {numPersonas}");
+            // If the new EXP total would exceed what's needed for the cap,
+            // reduce the gained EXP to only reach the cap
+            if (newExpTotal > expRequiredForCap)
+            {
+                int cappedGainedExp = expRequiredForCap - currentExp;
+                Utils.LogDebug($"EXP overflow detected: Original gain {gainedExp}, capped to {cappedGainedExp} to reach level cap {levelCap}");
+                return Math.Max(0, cappedGainedExp); // Ensure we don't return negative values
+            }
 
-                    for (short slot = 0; slot < numPersonas; slot++)
+            // No overflow, return original gained EXP
+            return gainedExp;
+        }
+        
+
+        private bool ShouldPersonaReceiveExp(short personaSlot, Persona* activePersona)
+        {
+            var persona = GetProtagPersona(personaSlot);
+            if (persona == (Persona*)0) return false;
+
+            // Active persona always receives full EXP
+            if (persona->Id == activePersona->Id)
+            {
+                Utils.LogDebug($"Persona slot {personaSlot} is active persona, will receive full EXP");
+                return true;
+            }
+
+            Utils.LogDebug($"Persona slot {personaSlot} will not receive EXP (not active, no Growth skills)");
+            return false;
+        }
+        private void SetupResultsExp(BattleResults* results, astruct_2* param_2)
+        {
+            // Let the original function do ALL the work first - it already handles:
+            // - Growth skill detection and EXP calculation
+            // - Setting up results->ProtagExpGains[]
+            // - Setting up results->ExpGains[] for party members
+            // - Level up detection and stat generation
+            _setupExpHook.OriginalFunction(results, param_2);
+
+            int levelCap = GetCurrentLevelCap();
+
+            // Now just apply level caps to the results the game already calculated
+
+            // Cap protagonist persona EXP gains
+            for (short i = 0; i < 12; i++)
+            {
+                if (results->ProtagExpGains[i] == 0) continue; // Skip if no EXP was given
+
+                var persona = GetProtagPersona(i);
+                if (persona == (Persona*)0) continue;
+
+                var level = persona->Level;
+                if (level >= levelCap)
+                {
+                    Utils.LogDebug($"Protag Persona {i} ({persona->Id}) is at level cap ({level} >= {levelCap}), removing EXP gain");
+                    results->ProtagExpGains[i] = 0;
+                    continue;
+                }
+
+                // Cap the EXP to not exceed level cap
+                int originalExp = (int)results->ProtagExpGains[i];
+                int cappedExp = CalculateCappedExp(persona, originalExp, levelCap);
+
+                if (cappedExp != originalExp)
+                {
+                    Utils.LogDebug($"Capped Protag Persona {i} EXP from {originalExp} to {cappedExp}");
+                    results->ProtagExpGains[i] = (uint)cappedExp;
+                }
+            }
+
+            // Cap party member EXP gains
+            for (int i = 0; i < 4; i++) // Max 4 party members in results
+            {
+                if (results->PartyMembers[i] == 0) continue; // Empty slot
+                if (results->ExpGains[i] == 0) continue; // No EXP gain
+
+                var member = (PartyMember)results->PartyMembers[i];
+                var persona = GetPartyMemberPersona(member);
+                if (persona == (Persona*)0) continue;
+
+                var level = persona->Level;
+                if (level >= levelCap)
+                {
+                    Utils.LogDebug($"Party member {member} is at level cap ({level} >= {levelCap}), removing EXP gain");
+                    results->ExpGains[i] = 0;
+
+                    // Also clear level up flag if it was set
+                    if ((results->LevelUpStatus & 0x10) != 0)
                     {
-                        IntPtr persona = _getProtagPersona(slot);
-                        if (persona == IntPtr.Zero)
-                        {
-                            _logger.WriteLine($"[GiveProtagExpHandler] Persona at slot {slot} pointer is zero, skipping");
-                            continue;
-                        }
-                        if (IsPersonaAtLevelCap(persona))
-                        {
-                            _logger.WriteLine($"[GiveProtagExpHandler] Protagonist persona {slot} at level cap, blocking exp");
-                            ZeroExpGain(results, slot, true);
-                        }
-                        else
-                        {
-                            _logger.WriteLine($"[GiveProtagExpHandler] Protagonist persona {slot} below level cap");
-                        }
+                        // You might need to be more careful here about which specific member was going to level up
+                        Utils.LogDebug($"Clearing level up status for capped member {member}");
                     }
+                    continue;
                 }
 
-                _logger.WriteLine("[GiveProtagExpHandler] Calling original function");
-                _giveProtagExpHook.OriginalFunction(results, param2, param3, param4);
-            }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[GiveProtagExpHandler] Exception: {ex.Message}");
-                _giveProtagExpHook.OriginalFunction(results, param2, param3, param4);
-            }
-            finally
-            {
-                _isGivingExp = false;
-                _logger.WriteLine("[GiveProtagExpHandler] Exiting");
+                // Cap the EXP to not exceed level cap
+                int originalExp = (int)results->ExpGains[i];
+                int cappedExp = CalculateCappedExp(persona, originalExp, levelCap);
+
+                if (cappedExp != originalExp)
+                {
+                    Utils.LogDebug($"Capped {member} EXP from {originalExp} to {cappedExp}");
+                    results->ExpGains[i] = (uint)cappedExp;
+                }
             }
         }
 
-        private void GivePartyMemberExpHandler(IntPtr results, IntPtr param2, IntPtr param3, IntPtr param4)
+        private bool IsInactive(PartyMember member, BattleResults* results)
         {
-            _logger.WriteLine("[GivePartyMemberExpHandler] Entered");
-
-            if (_isGivingExp)
+            // Check if they're already in the party
+            for (int i = 0; i < 4; i++)
             {
-                _logger.WriteLine("[GivePartyMemberExpHandler] Recursive call detected, calling original and returning");
-                _givePartyMemberExpHook.OriginalFunction(results, param2, param3, param4);
-                return;
+                if (results->PartyMembers[i] == (short)member) return false;
             }
 
-            _isGivingExp = true;
-
-            try
+            // Check if they're available
+            for (int i = 0; i < _numAvailable; i++)
             {
-                int levelCap = GetCurrentLevelCap();
-                int currentDay = _getTotalDay?.Invoke() ?? 0;
-                _logger.WriteLine($"[GivePartyMemberExpHandler] Level cap: {levelCap} (Day: 0x{currentDay:X})");
+                if (_available[i] == (short)member) return true;
+            }
+            return false;
+        }
 
-                for (int i = 0; i < 4; i++)
+        private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
+        {
+            _givePartyMemberExpHook.OriginalFunction(results, param_2, param_3, param_4);
+
+            for (PartyMember member = PartyMember.Yukari; member <= PartyMember.Koromaru; member++)
+            {
+                if (!IsInactive(member, results) || !_expGains.ContainsKey(member)) continue;
+
+                var persona = GetPartyMemberPersona(member);
+                var expGained = _expGains[member]; // This is already capped from SetupResultsExp
+
+                // Just add the EXP and let the game handle level ups naturally
+                if (expGained > 0)
                 {
-                    IntPtr partyMemberInfo = GetPartyMemberFromResults(results, i);
-                    if (partyMemberInfo == IntPtr.Zero)
+                    var oldLevel = persona->Level;
+                    persona->Exp += expGained;
+
+                    // Check if they leveled up and handle level cap enforcement
+                    var newLevel = persona->Level;
+                    int levelCap = GetCurrentLevelCap();
+
+                    if (newLevel > levelCap)
                     {
-                        _logger.WriteLine($"[GivePartyMemberExpHandler] Party member {i} pointer is zero, skipping");
-                        continue;
+                        // Force level back to cap and adjust EXP accordingly
+                        persona->Level = (byte)levelCap;
+                        var expForCap = GetPersonaRequiredExp(persona, (ushort)levelCap);
+                        persona->Exp = expForCap;
+                        Utils.LogDebug($"Capped {member} level from {newLevel} to {levelCap}");
                     }
-                    if (IsPartyMemberAtLevelCap(partyMemberInfo))
+
+                    Utils.LogDebug($"Gave {expGained} exp to {member}, level {oldLevel} -> {persona->Level}");
+                }
+            }
+        }
+
+        // NEW: Level up hook to handle level caps during level ups
+        private nuint LevelUpPartyMember(BattleResultsThing* resultsThing)
+        {
+            var thing = resultsThing->Thing;
+
+            // We only want to change stuff in state 1 (when it's picking a Persona's level up stuff to deal with)
+            if (thing->State > 1 || _levelUps.Count == 0)
+            {
+                return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+            }
+
+            var results = &thing->Info->Results;
+            Utils.LogDebug($"LevelUpSlot = {thing->LevelUpSlot}");
+
+            for (int i = 0; i < 4; i++)
+            {
+                Utils.LogDebug($"Slot {i} is {(PartyMember)results->PartyMembers[i]} who has {(&results->PersonaChanges)[i].LevelIncrease} level increases and {results->ExpGains[i]} exp gained.");
+            }
+
+            // Wait until all of the real level ups have been done so we can safely overwrite their data
+            for (int i = thing->LevelUpSlot; i < 4; i++)
+            {
+                var curMember = results->PartyMembers[i];
+                if (curMember == 0) continue;
+
+                if ((&results->PersonaChanges)[i].LevelIncrease != 0)
+                {
+                    return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+                }
+                else
+                {
+                    // Give them the exp ourself with level cap enforcement
+                    var persona = GetPartyMemberPersona((PartyMember)curMember);
+                    int levelCap = GetCurrentLevelCap();
+
+                    if (persona->Level < levelCap)
                     {
-                        _logger.WriteLine($"[GivePartyMemberExpHandler] Party member {i} at level cap {levelCap}, blocking exp");
-                        ZeroExpGain(results, i, false);
+                        int expToAdd = (int)results->ExpGains[i];
+                        int cappedExpToAdd = CalculateCappedExp(persona, expToAdd, levelCap);
+                        persona->Exp += cappedExpToAdd;
+
+                        // Enforce level cap if they went over
+                        if (persona->Level > levelCap)
+                        {
+                            Utils.LogDebug($"Enforcing level cap during EXP addition: {(PartyMember)curMember} level {persona->Level} -> {levelCap}");
+                            persona->Level = (byte)levelCap;
+                            var expForCap = GetPersonaRequiredExp(persona, (ushort)levelCap);
+                            persona->Exp = expForCap;
+                        }
+
+                        Utils.LogDebug($"Gave {cappedExpToAdd} capped EXP to {(PartyMember)curMember} (original: {expToAdd})");
                     }
                     else
                     {
-                        _logger.WriteLine($"[GivePartyMemberExpHandler] Party member {i} below level cap");
+                        Utils.LogDebug($"Skipping EXP for {(PartyMember)curMember} - already at level cap");
                     }
+
+                    results->PartyMembers[i] = 0;
                 }
-
-                _logger.WriteLine("[GivePartyMemberExpHandler] Calling original function");
-                _givePartyMemberExpHook.OriginalFunction(results, param2, param3, param4);
-            }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[GivePartyMemberExpHandler] Exception: {ex.Message}");
-                _givePartyMemberExpHook.OriginalFunction(results, param2, param3, param4);
-            }
-            finally
-            {
-                _isGivingExp = false;
-                _logger.WriteLine("[GivePartyMemberExpHandler] Exiting");
-            }
-        }
-
-        private void GivePersonaExpHandler(IntPtr persona, uint exp)
-        {
-            _logger.WriteLine("[GivePersonaExpHandler] Entered");
-
-            if (_isGivingExp)
-            {
-                _logger.WriteLine("[GivePersonaExpHandler] Recursive call detected, calling original and returning");
-                _givePersonaExpHook.OriginalFunction(persona, exp);
-                return;
             }
 
-            try
+            // Clear all of the real level ups so they can't loop
+            for (int i = 1; i < 4; i++)
+                results->PartyMembers[i] = 0;
+
+            // Change the data of an active party member to an inactive one
+            thing->LevelUpSlot = 0;
+            var levelUp = _levelUps.First();
+            var member = levelUp.Key;
+            var statChanges = levelUp.Value;
+
+            // Apply level cap enforcement to the level up data
+            int currentLevelCap = GetCurrentLevelCap();
+            var memberPersona = GetPartyMemberPersona(member);
+
+            if (memberPersona->Level >= currentLevelCap)
             {
-                if (persona == IntPtr.Zero)
+                Utils.LogDebug($"Skipping level up for {member} - already at level cap ({memberPersona->Level} >= {currentLevelCap})");
+                _levelUps.Remove(member);
+                _expGains.Remove(member);
+
+                // If there are more level ups to process, recursively call this function
+                if (_levelUps.Count > 0)
                 {
-                    _logger.WriteLine("[GivePersonaExpHandler] Persona pointer is zero, skipping");
-                    _givePersonaExpHook.OriginalFunction(persona, exp);
-                    return;
-                }
-
-                if (IsPersonaAtLevelCap(persona))
-                {
-                    int currentDay = _getTotalDay?.Invoke() ?? 0;
-                    _logger.WriteLine($"[GivePersonaExpHandler] Persona at level cap, setting exp to 0 (was {exp}) - Day: 0x{currentDay:X}");
-                    _givePersonaExpHook.OriginalFunction(persona, 0);
+                    return LevelUpPartyMember(resultsThing);
                 }
                 else
                 {
-                    _logger.WriteLine($"[GivePersonaExpHandler] Persona below level cap, giving exp {exp}");
-                    _givePersonaExpHook.OriginalFunction(persona, exp);
+                    return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[GivePersonaExpHandler] Exception: {ex.Message}");
-                _givePersonaExpHook.OriginalFunction(persona, exp);
-            }
 
-            _logger.WriteLine("[GivePersonaExpHandler] Exiting");
+            results->PartyMembers[0] = (short)member;
+            results->ExpGains[0] = (uint)_expGains[member];
+            results->PersonaChanges = statChanges;
+
+            Utils.LogDebug($"Leveling up {member}");
+            _levelUps.Remove(member);
+            _expGains.Remove(member);
+
+            return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
         }
 
-        private void ZeroExpGain(IntPtr results, int index, bool isProtag)
-        {
-            _logger.WriteLine($"[ZeroExpGain] Entered (Index: {index}, IsProtag: {isProtag})");
-
-            try
-            {
-                if (isProtag)
-                {
-                    IntPtr expGainsPtr = results + 0x200; // Verify offset
-                    _logger.WriteLine($"[ZeroExpGain] Zeroing protagonist exp gain at 0x{expGainsPtr + (index * 4):X}");
-                    Marshal.WriteInt32(expGainsPtr + (index * 4), 0);
-                }
-                else
-                {
-                    IntPtr expGainsPtr = results + 0x100; // Verify offset
-                    _logger.WriteLine($"[ZeroExpGain] Zeroing party member exp gain at 0x{expGainsPtr + (index * 4):X}");
-                    Marshal.WriteInt32(expGainsPtr + (index * 4), 0);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[ZeroExpGain] Exception: {ex.Message}");
-            }
-
-            _logger.WriteLine("[ZeroExpGain] Exiting");
-        }
-
-        private IntPtr GetPartyMemberFromResults(IntPtr results, int index)
-        {
-            _logger.WriteLine($"[GetPartyMemberFromResults] Entered (Index: {index})");
-
-            try
-            {
-                IntPtr partyMembersPtr = results + 0x80; // Verify offset
-                IntPtr memberPtr = Marshal.ReadIntPtr(partyMembersPtr + (index * IntPtr.Size));
-                _logger.WriteLine($"[GetPartyMemberFromResults] Party member {index} pointer: 0x{memberPtr:X}");
-                return memberPtr;
-            }
-            catch (Exception ex)
-            {
-                _logger.WriteLine($"[GetPartyMemberFromResults] Exception: {ex.Message}");
-                return IntPtr.Zero;
-            }
-        }
-
+        private delegate void SetupResultsExpDelegate(BattleResults* results, astruct_2* param_2);
+        private delegate void GivePartyMemberExpDelegate(BattleResults* results, nuint param_2, nuint param_3, nuint param_4);
+        private delegate nuint LevelUpPartyMemberDelegate(BattleResultsThing* results);
 
         #region Standard Overrides
         public override void ConfigurationUpdated(Config configuration)
         {
+            // Apply settings from configuration.
+            // ... your code here.
             _configuration = configuration;
+            _logger.WriteLine($"[{_modConfig.ModId}] Config Updated: Applying");
         }
         #endregion
 
         #region For Exports, Serialization etc.
-#pragma warning disable CS8618
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
         public Mod() { }
 #pragma warning restore CS8618
         #endregion
