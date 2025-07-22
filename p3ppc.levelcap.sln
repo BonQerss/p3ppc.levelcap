@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36301.6 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "p3ppc.levelcap", "p3ppc.levelcap\p3ppc.levelcap.csproj", "{FF70F312-30B9-4771-854E-36ED4F93771B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FF70F312-30B9-4771-854E-36ED4F93771B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF70F312-30B9-4771-854E-36ED4F93771B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF70F312-30B9-4771-854E-36ED4F93771B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF70F312-30B9-4771-854E-36ED4F93771B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A7B0E5F2-8373-4DF6-85EB-512457ECAA5E}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,350 @@
+{
+  "version": 3,
+  "targets": {
+    "net7.0-windows7.0": {
+      "Reloaded.Hooks.Definitions/1.11.0": {
+        "type": "package",
+        "compile": {
+          "lib/net6.0/Reloaded.Hooks.Definitions.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net6.0/Reloaded.Hooks.Definitions.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Reloaded.Memory/9.1.0": {
+        "type": "package",
+        "compile": {
+          "lib/net7.0/Reloaded.Memory.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net7.0/Reloaded.Memory.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Reloaded.Memory.Sigscan/3.1.9": {
+        "type": "package",
+        "dependencies": {
+          "Reloaded.Memory": "9.1.0",
+          "Reloaded.Memory.Sigscan.Definitions": "1.1.1"
+        },
+        "compile": {
+          "lib/net6.0/Reloaded.Memory.Sigscan.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net6.0/Reloaded.Memory.Sigscan.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Reloaded.Memory.Sigscan.Definitions/1.1.1": {
+        "type": "package",
+        "compile": {
+          "lib/net5.0/Reloaded.Memory.Sigscan.Definitions.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net5.0/Reloaded.Memory.Sigscan.Definitions.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Reloaded.Memory.SigScan.ReloadedII.Interfaces/1.2.0": {
+        "type": "package",
+        "dependencies": {
+          "Reloaded.Memory.Sigscan.Definitions": "1.1.0"
+        },
+        "compile": {
+          "lib/netstandard2.0/Reloaded.Memory.SigScan.ReloadedII.Interfaces.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/Reloaded.Memory.SigScan.ReloadedII.Interfaces.dll": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Reloaded.Mod.Interfaces/2.4.0": {
+        "type": "package",
+        "compile": {
+          "lib/netcoreapp3.1/Reloaded.Mod.Interfaces.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netcoreapp3.1/_._": {
+            "related": ".xml"
+          }
+        }
+      },
+      "Reloaded.SharedLib.Hooks/1.9.0": {
+        "type": "package",
+        "dependencies": {
+          "Reloaded.Hooks.Definitions": "1.11.0"
+        },
+        "compile": {
+          "lib/netstandard2.0/Reloaded.Hooks.ReloadedII.Interfaces.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/netstandard2.0/Reloaded.Hooks.ReloadedII.Interfaces.dll": {
+            "related": ".xml"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Reloaded.Hooks.Definitions/1.11.0": {
+      "sha512": "/z0AwcCvVTQHlQ9SMMMBqKEIrm5t/yBFPylySW2Rnr7uRGV9jGfoACFe79KZKF976dhtkyy2xl0HIXz5hRUkng==",
+      "type": "package",
+      "path": "reloaded.hooks.definitions/1.11.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.md",
+        "lib/net5.0/Reloaded.Hooks.Definitions.dll",
+        "lib/net5.0/Reloaded.Hooks.Definitions.xml",
+        "lib/net6.0/Reloaded.Hooks.Definitions.dll",
+        "lib/net6.0/Reloaded.Hooks.Definitions.xml",
+        "lib/netcoreapp3.0/Reloaded.Hooks.Definitions.dll",
+        "lib/netcoreapp3.0/Reloaded.Hooks.Definitions.xml",
+        "lib/netstandard2.0/Reloaded.Hooks.Definitions.dll",
+        "lib/netstandard2.0/Reloaded.Hooks.Definitions.xml",
+        "reloaded.hooks.definitions.1.11.0.nupkg.sha512",
+        "reloaded.hooks.definitions.nuspec"
+      ]
+    },
+    "Reloaded.Memory/9.1.0": {
+      "sha512": "WMGpTORArGrijf9VQLVC1BjCnUxaTgSew4Kitk9jTIHWywIKk/K2PpqMuSGVO77ILV65cRmMvwpAu2azAqALeg==",
+      "type": "package",
+      "path": "reloaded.memory/9.1.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.md",
+        "README.md",
+        "Reloaded-Icon.png",
+        "lib/net48/Reloaded.Memory.dll",
+        "lib/net48/Reloaded.Memory.xml",
+        "lib/net5.0/Reloaded.Memory.dll",
+        "lib/net5.0/Reloaded.Memory.xml",
+        "lib/net6.0/Reloaded.Memory.dll",
+        "lib/net6.0/Reloaded.Memory.xml",
+        "lib/net7.0/Reloaded.Memory.dll",
+        "lib/net7.0/Reloaded.Memory.xml",
+        "lib/netcoreapp3.1/Reloaded.Memory.dll",
+        "lib/netcoreapp3.1/Reloaded.Memory.xml",
+        "lib/netstandard2.0/Reloaded.Memory.dll",
+        "lib/netstandard2.0/Reloaded.Memory.xml",
+        "lib/netstandard2.1/Reloaded.Memory.dll",
+        "lib/netstandard2.1/Reloaded.Memory.xml",
+        "reloaded.memory.9.1.0.nupkg.sha512",
+        "reloaded.memory.nuspec"
+      ]
+    },
+    "Reloaded.Memory.Sigscan/3.1.9": {
+      "sha512": "DyKkWmw6N+0OiZC7MZmIHTJZspvNC42W3tQZgw9MyNniE00IqvH20+1jG+m1Y1NeB/1ryaBT8mbGXocmI4I4+Q==",
+      "type": "package",
+      "path": "reloaded.memory.sigscan/3.1.9",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.md",
+        "lib/net5.0/Reloaded.Memory.Sigscan.dll",
+        "lib/net5.0/Reloaded.Memory.Sigscan.xml",
+        "lib/net6.0/Reloaded.Memory.Sigscan.dll",
+        "lib/net6.0/Reloaded.Memory.Sigscan.xml",
+        "lib/netcoreapp3.1/Reloaded.Memory.Sigscan.dll",
+        "lib/netcoreapp3.1/Reloaded.Memory.Sigscan.xml",
+        "lib/netstandard2.0/Reloaded.Memory.Sigscan.dll",
+        "lib/netstandard2.0/Reloaded.Memory.Sigscan.xml",
+        "lib/netstandard2.1/Reloaded.Memory.Sigscan.dll",
+        "lib/netstandard2.1/Reloaded.Memory.Sigscan.xml",
+        "reloaded.memory.sigscan.3.1.9.nupkg.sha512",
+        "reloaded.memory.sigscan.nuspec"
+      ]
+    },
+    "Reloaded.Memory.Sigscan.Definitions/1.1.1": {
+      "sha512": "yzlH3DJIc2XCEaH4aS9sJ9otiV/IVEoKOWrc53cKkx1hU8SHf3A3kE+VpPWlQmfVO5WwRKzRJ8vIr8u8RdGLGw==",
+      "type": "package",
+      "path": "reloaded.memory.sigscan.definitions/1.1.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.md",
+        "lib/net5.0/Reloaded.Memory.Sigscan.Definitions.dll",
+        "lib/net5.0/Reloaded.Memory.Sigscan.Definitions.xml",
+        "lib/netcoreapp3.1/Reloaded.Memory.Sigscan.Definitions.dll",
+        "lib/netcoreapp3.1/Reloaded.Memory.Sigscan.Definitions.xml",
+        "lib/netstandard2.0/Reloaded.Memory.Sigscan.Definitions.dll",
+        "lib/netstandard2.0/Reloaded.Memory.Sigscan.Definitions.xml",
+        "reloaded.memory.sigscan.definitions.1.1.1.nupkg.sha512",
+        "reloaded.memory.sigscan.definitions.nuspec"
+      ]
+    },
+    "Reloaded.Memory.SigScan.ReloadedII.Interfaces/1.2.0": {
+      "sha512": "iRorTjJJA2d+u6hqv4C9fKbdC8KQN3bQ0bRpWv/4MoK6bTcDzetJhBgbsB5opgNJXb97KxFupxZlS84ykMxqTg==",
+      "type": "package",
+      "path": "reloaded.memory.sigscan.reloadedii.interfaces/1.2.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "lib/netstandard2.0/Reloaded.Memory.SigScan.ReloadedII.Interfaces.dll",
+        "lib/netstandard2.0/Reloaded.Memory.SigScan.ReloadedII.Interfaces.xml",
+        "reloaded.memory.sigscan.reloadedii.interfaces.1.2.0.nupkg.sha512",
+        "reloaded.memory.sigscan.reloadedii.interfaces.nuspec"
+      ]
+    },
+    "Reloaded.Mod.Interfaces/2.4.0": {
+      "sha512": "HKQu7M0MyToKU4NK5Ula29MXSNeHz01ZzMK9BWD+xqJCITemAPdMW+w60Swln3ceGCU/ZooFSKtn4I8rcSA9AQ==",
+      "type": "package",
+      "path": "reloaded.mod.interfaces/2.4.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.md",
+        "NuGet-Icon.png",
+        "lib/netcoreapp3.1/Reloaded.Mod.Interfaces.dll",
+        "lib/netcoreapp3.1/Reloaded.Mod.Interfaces.xml",
+        "reloaded.mod.interfaces.2.4.0.nupkg.sha512",
+        "reloaded.mod.interfaces.nuspec"
+      ]
+    },
+    "Reloaded.SharedLib.Hooks/1.9.0": {
+      "sha512": "AEDTDhCnYxJGuLrdZCZPoiqrdl/lW4XwA6bb5dntOvkyw4RBBm/gqoNlHS7RJS7k+kt36ES+UFZAtBeyusYtgw==",
+      "type": "package",
+      "path": "reloaded.sharedlib.hooks/1.9.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE",
+        "lib/netstandard2.0/Reloaded.Hooks.ReloadedII.Interfaces.dll",
+        "lib/netstandard2.0/Reloaded.Hooks.ReloadedII.Interfaces.xml",
+        "reloaded.sharedlib.hooks.1.9.0.nupkg.sha512",
+        "reloaded.sharedlib.hooks.nuspec"
+      ]
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net7.0-windows7.0": [
+      "Reloaded.Memory.SigScan.ReloadedII.Interfaces >= 1.2.0",
+      "Reloaded.Memory.Sigscan >= 3.1.9",
+      "Reloaded.Mod.Interfaces >= 2.4.0",
+      "Reloaded.SharedLib.Hooks >= 1.9.0"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\airin\\.nuget\\packages\\": {},
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\Users\\airin\\source\\repos\\p3ppc.levelcap\\p3ppc.levelcap\\p3ppc.levelcap.csproj",
+      "projectName": "p3ppc.levelcap",
+      "projectPath": "C:\\Users\\airin\\source\\repos\\p3ppc.levelcap\\p3ppc.levelcap\\p3ppc.levelcap.csproj",
+      "packagesPath": "C:\\Users\\airin\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\airin\\source\\repos\\p3ppc.levelcap\\p3ppc.levelcap\\obj\\",
+      "projectStyle": "PackageReference",
+      "fallbackFolders": [
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+      ],
+      "configFilePaths": [
+        "C:\\Users\\airin\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net7.0-windows"
+      ],
+      "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net7.0-windows7.0": {
+          "targetAlias": "net7.0-windows",
+          "projectReferences": {}
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "9.0.300"
+    },
+    "frameworks": {
+      "net7.0-windows7.0": {
+        "targetAlias": "net7.0-windows",
+        "dependencies": {
+          "Reloaded.Memory.SigScan.ReloadedII.Interfaces": {
+            "target": "Package",
+            "version": "[1.2.0, )"
+          },
+          "Reloaded.Memory.Sigscan": {
+            "target": "Package",
+            "version": "[3.1.9, )"
+          },
+          "Reloaded.Mod.Interfaces": {
+            "include": "Compile, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+            "target": "Package",
+            "version": "[2.4.0, )"
+          },
+          "Reloaded.SharedLib.Hooks": {
+            "target": "Package",
+            "version": "[1.9.0, )"
+          }
+        },
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[7.0.20, 7.0.20]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[7.0.20, 7.0.20]"
+          },
+          {
+            "name": "Microsoft.WindowsDesktop.App.Ref",
+            "version": "[7.0.20, 7.0.20]"
+          }
+        ],
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.302\\RuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}
