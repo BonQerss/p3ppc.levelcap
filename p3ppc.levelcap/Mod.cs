@@ -11,6 +11,7 @@ using Reloaded.Mod.Interfaces.Structs;
 using IReloadedHooks = Reloaded.Hooks.ReloadedII.Interfaces.IReloadedHooks;
 using p3ppc.expShare.NuGet.templates.defaultPlus;
 using p3ppc.expShare;
+using System.ComponentModel.Design;
 
 namespace p3ppc.levelcap
 {/// <summary>
@@ -321,14 +322,9 @@ namespace p3ppc.levelcap
             for (int i = 0; i < 4; i++)
             {
                 if (results->PartyMembers[i] == (short)member) return false;
-            }
+            };
 
-            // Check if they're available
-            for (int i = 0; i < _numAvailable; i++)
-            {
-                if (_available[i] == (short)member) return true;
-            }
-            return false;
+            return true;
         }
 
         private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
