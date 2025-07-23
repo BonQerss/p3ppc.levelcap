@@ -139,6 +139,13 @@ namespace p3ppc.levelcap
                 _logger.WriteLine($"Found GetPersonaLevel at 0x{address:X}");
             });
 
+            Utils.SigScan("E8 ?? ?? ?? ?? 45 33 D2 4C 8B D8", "GetPersonaSkills", address =>
+            {
+                var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
+                _getPersonaSkills = _hooks.CreateWrapper<GetPersonaSkillsDelegate>((long)funcAddress, out _);
+                _logger.WriteLine($"Found GetPersonaSkills at 0x{address:X}");
+            });
+
         }
 
         private int GetCurrentLevelCap()
@@ -219,6 +226,7 @@ namespace p3ppc.levelcap
                 return Math.Max(0, cappedGainedExp); // Ensure we don't return negative values
             }
 
+
             // No overflow, return original gained EXP
             return gainedExp;
         }
@@ -226,6 +234,7 @@ namespace p3ppc.levelcap
 
         private void SetupResultsExp(BattleResults* results, astruct_2* param_2)
         {
+            // Essential: Keep the fixed block and original function call
             fixed (short* party = &_available[0])
             {
                 _numAvailable = GetAvailableParty(party);
@@ -247,7 +256,6 @@ namespace p3ppc.levelcap
                     Utils.LogDebug($"{member} is above or at level cap ({level} >= {levelCap}), skipping EXP gain.");
                     continue;
                 }
-
 
                 int gainedExp = (int)(CalculateGainedExp(level, param_2));
 
@@ -281,40 +289,126 @@ namespace p3ppc.levelcap
                 }
             }
 
-            // Setup Protag Persona Exp
+            // Setup Protag Persona Exp - Modified to only affect active persona and Growth skill personas
             var activePersona = GetPartyMemberPersona(PartyMember.Protag);
+            if (activePersona == null)
+            {
+                Utils.LogError("Failed to get active persona for protagonist!");
+                return;
+            }
+
+            short activePersonaId = activePersona->Id;
             int levelCapForProtag = GetCurrentLevelCap();
+
             for (short i = 0; i < 12; i++)
             {
                 var persona = GetProtagPersona(i);
-                if (persona == (Persona*)0 || persona->Id == activePersona->Id)
+                if (persona == (Persona*)0)
                     continue;
 
                 var level = persona->Level;
-                int levelCap = GetCurrentLevelCap();
-                if (level >= 99 || level >= levelCap)
+                if (level >= 99 || level >= levelCapForProtag)
                 {
-                    Utils.LogDebug($"{i} is above or at level cap ({level} >= {levelCap}), skipping EXP gain.");
+                    Utils.LogDebug($"Protag Persona {i} ({persona->Id}) is above or at level cap ({level} >= {levelCapForProtag}), skipping EXP gain.");
                     continue;
                 }
 
+                int baseExpGained = (int)(CalculateGainedExp(level, param_2));
+                uint finalExpGained = (uint)baseExpGained;
 
-                int gainedExp = (int)(CalculateGainedExp(level, param_2));
-                results->ProtagExpGains[i] += (uint)gainedExp;
+                // Check if this is the active persona or has growth skills
+                if (persona->Id != activePersonaId)
+                {
+                    // Check if _getPersonaSkills is initialized
+                    if (_getPersonaSkills == null)
+                    {
+                        Utils.LogError("_getPersonaSkills is not initialized!");
+                        continue;
+                    }
 
-                Utils.LogDebug($"Giving Protag Persona {i} ({persona->Id}) {gainedExp} exp");
+                    var skills = _getPersonaSkills(new IntPtr(persona));
+                    if (skills == null)
+                    {
+                        Utils.LogDebug($"Failed to get skills for Protag Persona {i} ({persona->Id}), skipping.");
+                        continue;
+                    }
+
+                    uint growth1Gains = 0;
+                    uint growth2Gains = 0;
+                    uint growth3Gains = 0;
+
+                    // Check all 8 skill slots for Growth skills
+                    for (int skillSlot = 0; skillSlot < 8; skillSlot++)
+                    {
+                        short skill = skills[skillSlot];
+                        if (skill != 0)
+                        {
+                            if (skill == 0x229) // Growth 1
+                            {
+                                growth1Gains = (uint)(baseExpGained * 0.25f);
+                            }
+                            else if (skill == 0x22a) // Growth 2
+                            {
+                                growth2Gains = (uint)(baseExpGained * 0.5f);
+                            }
+                            else if (skill == 0x22b) // Growth 3
+                            {
+                                growth3Gains = (uint)baseExpGained;
+                            }
+                        }
+                    }
+
+                    // Priority system: Growth 3 > Growth 2 > Growth 1 > None
+                    if (growth3Gains >= 1)
+                    {
+                        finalExpGained = growth3Gains;
+                    }
+                    else if (growth2Gains >= 1)
+                    {
+                        finalExpGained = growth2Gains;
+                    }
+                    else if (growth1Gains >= 1)
+                    {
+                        finalExpGained = growth1Gains;
+                    }
+                    else
+                    {
+                        // No growth skills, skip this persona
+                        Utils.LogDebug($"Protag Persona {i} ({persona->Id}) has no Growth skills and is not active, skipping EXP gain.");
+                        continue;
+                    }
+                }
+
+                // Apply level cap to the final EXP
+                int cappedExp = CalculateCappedExp(persona, (int)finalExpGained, levelCapForProtag);
+
+                if (cappedExp != (int)finalExpGained)
+                {
+                    Utils.LogDebug($"Protag Persona {i} ({persona->Id}) EXP capped from {finalExpGained} to {cappedExp}.");
+                }
+
+                if (cappedExp == 0)
+                {
+                    Utils.LogDebug($"Protag Persona {i} ({persona->Id}) is capped — no EXP will be applied.");
+                    continue;
+                }
+
+                finalExpGained = (uint)cappedExp;
+                results->ProtagExpGains[i] += finalExpGained;
+
+                string reasonText = (persona->Id == activePersonaId) ? "active persona" : "has Growth skill";
+                Utils.LogDebug($"Giving Protag Persona {i} ({persona->Id}) {finalExpGained} exp ({reasonText})");
 
                 var currentExp = persona->Exp;
                 var requiredExp = GetPersonaRequiredExp(persona, (ushort)(level + 1));
-                if (requiredExp <= currentExp + gainedExp)
+                if (requiredExp <= currentExp + (int)finalExpGained)
                 {
                     Utils.LogDebug($"Protag Persona {i} ({persona->Id}) is ready to level up");
                     results->LevelUpStatus |= 8; // signify that a protag persona is ready to level up
-                    GenerateLevelUpPersona(persona, &(&results->ProtagPersonaChanges)[i], gainedExp);
+                    GenerateLevelUpPersona(persona, &(&results->ProtagPersonaChanges)[i], (int)finalExpGained);
                 }
             }
         }
-
 
         private bool IsInactive(PartyMember member, BattleResults* results)
         {
