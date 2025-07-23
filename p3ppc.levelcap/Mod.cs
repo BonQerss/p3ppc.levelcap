@@ -61,7 +61,6 @@ namespace p3ppc.levelcap
         private short[] _available = new short[9];
         private int _numAvailable = 0;
 
-        // Function delegates - based on actual assembly analysis
         private delegate void GiveProtagExpDelegate(IntPtr results, IntPtr param2, IntPtr param3, IntPtr param4);
         private delegate void GivePersonaExpDelegate(IntPtr persona, uint exp);
         private delegate IntPtr GetProtagPersonaDelegate(short slot);
@@ -71,11 +70,9 @@ namespace p3ppc.levelcap
         private delegate ushort GetNumPersonasDelegate();
         private delegate short* GetPersonaSkillsDelegate(IntPtr persona);
 
-        // Hooks
         private IHook<GiveProtagExpDelegate> _giveProtagExpHook;
         private IHook<GivePersonaExpDelegate> _givePersonaExpHook;
 
-        // Function wrappers - based on actual assembly
         private GetProtagPersonaDelegate _getProtagPersona;
         private GetPartyMemberPersonaDelegate _getPartyMemberPersona;
         private GetPersonaLevelDelegate _getPersonaLevel;
@@ -231,10 +228,9 @@ namespace p3ppc.levelcap
             {
                 int cappedGainedExp = expRequiredForCap - currentExp;
                 Utils.LogDebug($"EXP overflow detected: Original gain {gainedExp}, capped to {cappedGainedExp} to reach level cap {levelCap}");
-                return Math.Max(0, cappedGainedExp); // Ensure we don't return negative values
+                return Math.Max(0, cappedGainedExp);
             }
 
-            // No overflow, return original gained EXP
             return gainedExp;
         }
 
@@ -276,6 +272,7 @@ namespace p3ppc.levelcap
                     results->GainedExp = cappedExp;
                 }
             }
+
             for (PartyMember member = PartyMember.Yukari; member <= PartyMember.Koromaru; member++)
             {
                 _expGains.Remove(member);
@@ -373,7 +370,6 @@ namespace p3ppc.levelcap
                     results->ProtagExpGains[i] = 0;
                     continue;
                 }
-
                 var currentExp = persona->Exp;
                 var requiredExp = GetPersonaRequiredExp(persona, (ushort)(level + 1));
                 if (requiredExp <= currentExp + cappedExp)
@@ -391,6 +387,7 @@ namespace p3ppc.levelcap
         private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
         {
             _givePartyMemberExpHook.OriginalFunction(results, param_2, param_3, param_4);
+
         }
 
         private nuint LevelUpPartyMember(BattleResultsThing* resultsThing)
@@ -409,7 +406,7 @@ namespace p3ppc.levelcap
             {
                 Utils.LogDebug($"Slot {i} is {(PartyMember)results->PartyMembers[i]} who has {(&results->PersonaChanges)[i].LevelIncrease} level increases and {results->ExpGains[i]} exp gained.");
             }
-
+            bool hasActiveLevelUps = false;
             for (int i = thing->LevelUpSlot; i < 4; i++)
             {
                 var curMember = results->PartyMembers[i];
@@ -417,30 +414,41 @@ namespace p3ppc.levelcap
 
                 if ((&results->PersonaChanges)[i].LevelIncrease != 0)
                 {
-                    return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+                    hasActiveLevelUps = true;
+                    break;
                 }
                 else
                 {
                     results->PartyMembers[i] = 0;
                 }
             }
+            if (hasActiveLevelUps)
+            {
+                return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+            }
 
-            for (int i = 1; i < 4; i++)
-                results->PartyMembers[i] = 0;
+            if (thing->LevelUpSlot == 0)
+            {
+                for (int i = 1; i < 4; i++)
+                    results->PartyMembers[i] = 0;
 
-            thing->LevelUpSlot = 0;
-            var levelUp = _levelUps.First();
-            var member = levelUp.Key;
-            var statChanges = levelUp.Value;
-            results->PartyMembers[0] = (short)member;
-            results->ExpGains[0] = (uint)_expGains[member];
-            results->PersonaChanges = statChanges;
+                var levelUp = _levelUps.First();
+                var member = levelUp.Key;
+                var statChanges = levelUp.Value;
+                results->PartyMembers[0] = (short)member;
+                results->ExpGains[0] = (uint)_expGains[member];
+                results->PersonaChanges = statChanges;
 
-            Utils.LogDebug($"Leveling up {member}");
-            _levelUps.Remove(member);
-            _expGains.Remove(member);
+                Utils.LogDebug($"Leveling up inactive member {member}");
+                _levelUps.Remove(member);
+                _expGains.Remove(member);
 
-            return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+                return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+            }
+            else
+            {
+                return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+            }
         }
 
         private delegate void SetupResultsExpDelegate(BattleResults* results, astruct_2* param_2);
