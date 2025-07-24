@@ -305,11 +305,37 @@ namespace p3ppc.levelcap
                     continue;
                 }
 
-                int gainedExp = (int)(CalculateGainedExp(level, param_2));
 
+                // non functional experimental changes
+                // "works" but causes currentexp for party members to be 0, forcing them to never level up again
+                // gotta fix that
+                //{
+                //    Utils.LogDebug($"{member} is above or at level cap ({level} >= {levelCap}), skipping EXP gain.");
+                //
+                //    // Clear LevelUpStatus for this member (bit 4)
+                //    results->LevelUpStatus &= unchecked((ushort)~0x10);
+//
+                //    // Clear LevelIncrease field
+                //    for (int i = 0; i < 4; i++)
+                //    {
+               //         if (results->PartyMembers[i] == (short)member)
+               //         {
+               //             (&results->PersonaChanges)[i].LevelIncrease = 0;
+               //             break;
+               //         }
+               //     }
+//
+               //     // Remove from level up tracking dictionary
+              //      _levelUps.Remove(member);
+              //      continue;
+              //  }
+
+
+
+                int gainedExp = (int)(CalculateGainedExp(level, param_2));
+                int cappedExp = CalculateCappedExp(persona, gainedExp, levelCap);
                 if (gainedExp > 0)
                 {
-                    int cappedExp = CalculateCappedExp(persona, gainedExp, levelCap);
                     if (cappedExp != gainedExp)
                     {
                         Utils.LogDebug($"{member} EXP capped from {gainedExp} to {cappedExp}.");
@@ -324,9 +350,13 @@ namespace p3ppc.levelcap
                     gainedExp = cappedExp;
                 }
 
+                Utils.LogDebug($"Gained exp is {gainedExp} and Capped EXP is {cappedExp}.");
                 var currentExp = persona->Exp;
                 var requiredExp = GetPersonaRequiredExp(persona, (ushort)(level + 1));
+                Utils.LogDebug($"Required EXP is is {requiredExp}");
                 _expGains[member] = gainedExp;
+
+                Utils.LogDebug($"Required EXP is is {requiredExp} something {currentExp} is currentExp and {gainedExp} is gainedEXP");
 
                 if (requiredExp <= currentExp + gainedExp)
                 {
@@ -419,7 +449,7 @@ namespace p3ppc.levelcap
                 var curMember = results->PartyMembers[i];
                 if (curMember == 0) continue;
 
-                if ((&results->PersonaChanges)[i].LevelIncrease != 0)
+                if ((&results->PersonaChanges)[i].LevelIncrease != 0 && results->ExpGains[i] > 0)
                 {
                     hasActiveLevelUps = true;
                     break;
