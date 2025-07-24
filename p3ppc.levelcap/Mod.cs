@@ -256,6 +256,15 @@ namespace p3ppc.levelcap
             return gainedExp;
         }
 
+        private byte GetPartyMemberLevel(PartyMember member)
+        {
+            var persona = GetPartyMemberPersona(member);
+            if (persona == null)
+                return 0;
+            return persona->Level;
+        }
+
+
         private void SetupResultsExp(BattleResults* results, astruct_2* param_2)
         {
             fixed (short* party = &_available[0])
@@ -308,7 +317,7 @@ namespace p3ppc.levelcap
 
                 // non functional experimental changes
                 // "works" but causes currentexp for party members to be 0, forcing them to never level up again
-                // gotta fix that
+                // gott
                 //{
                 //    Utils.LogDebug($"{member} is above or at level cap ({level} >= {levelCap}), skipping EXP gain.");
                 //
@@ -419,7 +428,38 @@ namespace p3ppc.levelcap
                     GenerateLevelUpPersona(persona, &(&results->ProtagPersonaChanges)[i], cappedExp);
                 }
             }
-        }
+
+                // more broken experimental changes
+                // also causes current exp to be 0
+                // gotta figure out common thread
+                // for (int i = 0; i < 4; i++)
+                //{
+                //    PartyMember member = (PartyMember)results->PartyMembers[i];
+                //    if (member == PartyMember.None) continue;
+                //
+                //    byte level = GetPartyMemberLevel(member);
+                 //   bool overCap = level >= 99 || level >= levelCap;
+                 //   bool gotNoExp = results->ExpGains[i] == 0;
+//
+                //    if (overCap)
+                //    {
+                //        (&results->PersonaChanges)[i].LevelIncrease = 0;
+               ///         results->LevelUpStatus &= unchecked((ushort)~(1 << (i * 4)));
+                //        _levelUps.Remove(member);
+
+                 //       Utils.LogDebug($"{member} is capped. EXP gain = {results->ExpGains[i]}. Preventing level up.");
+                 //   }
+                //    else if (gotNoExp && (&results->PersonaChanges)[i].LevelIncrease > 0)
+                //    {
+                 //       (&results->PersonaChanges)[i].LevelIncrease = 0;
+                //        results->LevelUpStatus &= unchecked((ushort)~(1 << (i * 4)));
+                //        _levelUps.Remove(member);
+                //
+                //        Utils.LogDebug($"{member} had LevelIncrease but 0 EXP — breaking false level-up.");
+                //    }
+                }
+
+
 
         private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
         {
