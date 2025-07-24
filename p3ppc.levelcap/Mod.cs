@@ -148,26 +148,33 @@ namespace p3ppc.levelcap
 
         private int GetCurrentLevelCap()
         {
-            int currentDay = 0;
-            currentDay = _getTotalDay();
-            _logger.WriteLine($"[GetCurrentLevelCap] Current day from _getTotalDay: 0x{currentDay:X}");
+            int currentDay = _getTotalDay();
+            _logger.WriteLine($"[GetCurrentLevelCap] Current day: 0x{currentDay:X}");
 
-            int maxLevel = 1;
+            int previousKey = 0;
+            int previousCap = 1;
+
             foreach (var kvp in _levelCaps)
             {
-                if (currentDay >= kvp.Key)
+                int key = kvp.Key;
+                int cap = kvp.Value;
+
+                if (currentDay < key)
                 {
-                    maxLevel = kvp.Value;
+                    // current day is between previousKey and key
+                    // you want the CAP for the *later* key, not the previous one
+                    _logger.WriteLine($"[GetCurrentLevelCap] Current day ({currentDay}) is before {key}, returning cap {cap}");
+                    return cap;
                 }
-                else
-                {
-                    break;
-                }
+                previousKey = key;
+                previousCap = cap;
             }
 
-            _logger.WriteLine($"[GetCurrentLevelCap] Returning max level cap: {maxLevel}");
-            return maxLevel;
+            // currentDay >= last key, return last cap
+            _logger.WriteLine($"[GetCurrentLevelCap] Current day >= last cap date ({previousKey}), returning last cap {previousCap}");
+            return previousCap;
         }
+
 
         private bool IsPersonaAtLevelCap(IntPtr persona)
         {

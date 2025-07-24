@@ -34,22 +34,22 @@ internal class Utils
     internal static void LogDebug(string message)
     {
         if (_config.DebugEnabled)
-            _logger.WriteLine($"[Exp Share] {message}");
+            _logger.WriteLine($"[Level Cap] {message}");
     }
 
     internal static void Log(string message)
     {
-        _logger.WriteLine($"[Exp Share] {message}");
+        _logger.WriteLine($"[Level Cap] {message}");
     }
 
     internal static void LogError(string message, Exception e)
     {
-        _logger.WriteLine($"[Exp Share] {message}: {e.Message}", System.Drawing.Color.Red);
+        _logger.WriteLine($"[Level Cap] {message}: {e.Message}", System.Drawing.Color.Red);
     }
 
     internal static void LogError(string message)
     {
-        _logger.WriteLine($"[Exp Share] {message}", System.Drawing.Color.Red);
+        _logger.WriteLine($"[Level Cap] {message}", System.Drawing.Color.Red);
     }
 
     internal static void SigScan(string pattern, string name, Action<nint> action)
