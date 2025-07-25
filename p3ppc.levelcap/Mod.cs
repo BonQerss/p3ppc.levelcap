@@ -113,6 +113,11 @@ namespace p3ppc.levelcap
                 _setupExpHook = _hooks.CreateHook<SetupResultsExpDelegate>(SetupResultsExp, address).Activate();
             });
 
+            Utils.SigScan("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC 20 48 89 CF 48 8D 0D ?? ?? ?? ??", "GivePartyMemberExp", address =>
+            {
+                _givePartyMemberExpHook = _hooks.CreateHook<GivePartyMemberExpDelegate>(GivePartyMemberExp, address).Activate();
+            });
+
 
             Utils.SigScan("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 81 EC B0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B E9 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B CD", "LevelUpPartyMember", address =>
             {
@@ -357,19 +362,6 @@ namespace p3ppc.levelcap
                 }
                 
             }
-
-
-
-    private bool IsActive(PartyMember member, BattleResults* results)
-    {
-        // Check if they're already in the party
-        for (int i = 0; i < 4; i++)
-        {
-                if (results->PartyMembers[i] == (short)member) return true;
-        }
-
-            return false;
-    }
         private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
         {
             _givePartyMemberExpHook.OriginalFunction(results, param_2, param_3, param_4);
@@ -391,6 +383,41 @@ namespace p3ppc.levelcap
                 }
             }
         }
+        private void ApplyExpToActivePartyMembers(BattleResults* results)
+        {
+            foreach (var kvp in _expGains)
+            {
+                PartyMember member = kvp.Key;
+                int gainedExp = kvp.Value;
+
+                if (!IsActive(member, results))
+                {
+                    _logger.WriteLine($"[ApplyExp] Skipping {member}, not active.");
+                    continue;
+                }
+
+                var persona = GetPartyMemberPersona(member);
+                if (persona == null) continue;
+
+                persona->Exp += gainedExp;
+                _logger.WriteLine($"[ApplyExp] Gave {gainedExp} EXP to {member}.");
+            }
+
+            _expGains.Clear();
+        }
+
+
+
+        private bool IsActive(PartyMember member, BattleResults* results)
+    {
+        // Check if they're already in the party
+        for (int i = 0; i < 4; i++)
+        {
+                if (results->PartyMembers[i] == (short)member) return true;
+        }
+
+            return false;
+    }
 
         private nuint LevelUpPartyMember(BattleResultsThing* resultsThing)
         {
