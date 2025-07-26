@@ -1,18 +1,19 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using Reloaded.Hooks.Definitions;
-using Reloaded.Mod.Interfaces;
-using p3ppc.levelcap.Template;
-using Reloaded.Hooks.ReloadedII.Interfaces;
-using p3ppc.levelcap.Configuration;
-using static p3ppc.expShare.Native;
-using Reloaded.Mod.Interfaces.Structs;
-using IReloadedHooks = Reloaded.Hooks.ReloadedII.Interfaces.IReloadedHooks;
-using p3ppc.expShare.NuGet.templates.defaultPlus;
-using p3ppc.expShare;
 using System.ComponentModel.Design;
+using System.Reflection.Emit;
 using System.Reflection.Metadata.Ecma335;
+using System.Runtime.InteropServices;
+using p3ppc.expShare;
+using p3ppc.expShare.NuGet.templates.defaultPlus;
+using p3ppc.levelcap.Configuration;
+using p3ppc.levelcap.Template;
+using Reloaded.Hooks.Definitions;
+using Reloaded.Hooks.ReloadedII.Interfaces;
+using Reloaded.Mod.Interfaces;
+using Reloaded.Mod.Interfaces.Structs;
+using static p3ppc.expShare.Native;
+using IReloadedHooks = Reloaded.Hooks.ReloadedII.Interfaces.IReloadedHooks;
 
 namespace p3ppc.levelcap
 {/// <summary>
@@ -66,6 +67,7 @@ namespace p3ppc.levelcap
         private delegate void GivePersonaExpDelegate(IntPtr persona, uint exp);
         private delegate IntPtr GetProtagPersonaDelegate(short slot);
         private delegate IntPtr GetPartyMemberPersonaDelegate(IntPtr partyMemberInfo);
+        private delegate IntPtr GetLevelDelegate(IntPtr partyMemberInfo);
         private delegate byte GetPersonaLevelDelegate(IntPtr persona);
         private delegate byte GetPartyMemberLevelDelegate(IntPtr partyMemberInfo);
         private delegate ushort GetNumPersonasDelegate();
@@ -80,6 +82,13 @@ namespace p3ppc.levelcap
         private GetPartyMemberLevelDelegate _getPartyMemberLevel;
         private GetNumPersonasDelegate _getNumPersonas;
         private GetPersonaSkillsDelegate _getPersonaSkills;
+        private GetLevelDelegate _getLevel;
+
+        private delegate int GetPartyMemberExpDelegate();
+        private GetPartyMemberExpDelegate _getPartyMemberExp;
+
+        private delegate int CalculateLevelDelegate(int totalExp);
+        private CalculateLevelDelegate _calculateLevel;
 
         private SortedDictionary<int, int> _levelCaps => new SortedDictionary<int, int>
         {
@@ -145,7 +154,22 @@ namespace p3ppc.levelcap
                 _logger.WriteLine($"Found GetPersonaSkills at 0x{address:X}");
             });
 
+            Utils.SigScan("E8 ?? ?? ?? ?? 45 33 D2 4C 8B D8", "GetPartyMemberLevel", address =>
+            {
+                var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
+                _getLevel = _hooks.CreateWrapper<GetLevelDelegate>((long)funcAddress, out _);
+                _logger.WriteLine($"Found GetLevel at 0x{address:X}");
+            });
 
+            Utils.SigScan("48 8D 64 24 ?? 4C 89 34 24 49 C7 C6 FA 64 A4 1C", "GetPartyMemberExp", address =>
+            {
+                _getPartyMemberExp = _hooks.CreateWrapper<GetPartyMemberExpDelegate>(address, out _);
+            });
+
+            Utils.SigScan("40 53 48 83 EC 20 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 45 30 C0", "CalculateLevel", address =>
+            {
+                _calculateLevel = _hooks.CreateWrapper<CalculateLevelDelegate>(address, out _);
+            });
         }
 
         private int GetCurrentLevelCap()
@@ -177,42 +201,6 @@ namespace p3ppc.levelcap
             return previousCap;
         }
 
-
-        private bool IsPersonaAtLevelCap(IntPtr persona)
-        {
-            byte currentLevel = 0;
-            currentLevel = _getPersonaLevel(persona);
-            _logger.WriteLine($"[IsPersonaAtLevelCap] Persona current level: {currentLevel}");
-            int levelCap = GetCurrentLevelCap();
-            bool atCap = currentLevel >= levelCap;
-            _logger.WriteLine($"[IsPersonaAtLevelCap] Level cap: {levelCap}, At cap: {atCap}");
-            return atCap;
-        }
-
-        private bool IsPartyMemberAtLevelCap(IntPtr member)
-        {
-            byte currentLevel = 0;
-            currentLevel = _getPartyMemberLevel(member);
-            _logger.WriteLine($"[IsPartyMemberAtLevelCap] Party member current level: {currentLevel}");
-            int levelCap = GetCurrentLevelCap();
-            bool atCap = currentLevel >= levelCap;
-            _logger.WriteLine($"[IsPartyMemberAtLevelCap] Level cap: {levelCap}, At cap: {atCap}");
-            return atCap;
-        }
-
-        private bool IsProtagAtLevelCap()
-        {
-            var activePersona = GetPartyMemberPersona(PartyMember.Protag);
-            if (activePersona == null) return false;
-
-            byte currentLevel = _getPersonaLevel(new IntPtr(activePersona));
-            _logger.WriteLine($"[IsProtagAtLevelCap] Protagonist current level: {currentLevel}");
-            int levelCap = GetCurrentLevelCap();
-            bool atCap = currentLevel >= levelCap;
-            _logger.WriteLine($"[IsProtagAtLevelCap] Level cap: {levelCap}, At cap: {atCap}");
-            return atCap;
-        }
-
         private int CalculateCappedExp(int currentLevel, int gainedExp, int levelCap, int requiredExp, int currentExp, int totalExpForLevelCap)
         {
             if (currentLevel >= levelCap)
@@ -241,9 +229,12 @@ namespace p3ppc.levelcap
             {
                 _numAvailable = GetAvailableParty(party);
             }
-            _setupExpHook.OriginalFunction(results, param_2);
 
             int levelCap = GetCurrentLevelCap();
+
+            //
+            // How the hell does the logic work for the protag?????????????????????????
+            //
 
             // Setup Party Exp
             for (PartyMember member = PartyMember.Yukari; member <= PartyMember.Koromaru; member++)
@@ -263,7 +254,7 @@ namespace p3ppc.levelcap
                 int cappedExp;
 
                 if (level >= 99 || level >= levelCap)
-        {
+                {
                     cappedExp = 0;
                     Utils.LogDebug($"[SetupResultsExp] Member {member} at level cap ({level} >= {levelCap}), setting EXP to 0");
 
@@ -282,7 +273,7 @@ namespace p3ppc.levelcap
                         }
                     }
                 }
-        else
+                else
                 {
                     cappedExp = CalculateCappedExp(level, gainedExp, levelCap, requiredExp, currentExp, requiredREALexp);
                     _expGains[member] = cappedExp;
