@@ -221,18 +221,15 @@ namespace p3ppc.levelcap
                 return 0;
             }
 
-            if (currentExp + gainedExp > totalExpForLevelCap) // current xp (500k) + gainedExp(16) is greater than the xp it takes to get to level cap
+            if (currentExp + gainedExp > totalExpForLevelCap)
             {
-                // Only then cap the EXP
-                int cappedGain = totalExpForLevelCap - currentExp;
-                Utils.LogDebug($"Returning {cappedGain} instead of {gainedExp}");
+                int cappedGain = Math.Max(0, totalExpForLevelCap - currentExp);
+                Utils.LogDebug($"Capping EXP: {cappedGain} instead of {gainedExp} (current: {currentExp}, cap total: {totalExpForLevelCap})");
                 return cappedGain;
-                
             }
 
-            Utils.LogDebug($"Returning {gainedExp}");
+            Utils.LogDebug($"No capping needed: {gainedExp}");
             return gainedExp;
-            
         }
 
         private void SetupResultsExp(BattleResults* results, astruct_2* param_2)
@@ -246,6 +243,8 @@ namespace p3ppc.levelcap
             }
             _setupExpHook.OriginalFunction(results, param_2);
 
+            int levelCap = GetCurrentLevelCap();
+
             // Setup Party Exp
             for (PartyMember member = PartyMember.Yukari; member <= PartyMember.Koromaru; member++)
             {
@@ -253,40 +252,61 @@ namespace p3ppc.levelcap
                 _levelUps.Remove(member);
                 if (!IsActive(member, results)) continue;
 
-                int levelCap = GetCurrentLevelCap();
-
                 var persona = GetPartyMemberPersona(member);
                 var level = persona->Level;
-                if (level >= 99 || level >= levelCap) continue;
 
                 int gainedExp = (int)(CalculateGainedExp(level, param_2));
                 var currentExp = persona->Exp;
                 var requiredExp = GetPersonaRequiredExp(persona, (ushort)(level + 1));
                 var requiredREALexp = GetPersonaRequiredExp(persona, (ushort)(levelCap));
 
-                int cappedExp = CalculateCappedExp(level, gainedExp, levelCap, requiredExp, currentExp, requiredREALexp);
+                int cappedExp;
 
-                _expGains[member] = cappedExp;
+                if (level >= 99 || level >= levelCap)
+        {
+                    cappedExp = 0;
+                    Utils.LogDebug($"[SetupResultsExp] Member {member} at level cap ({level} >= {levelCap}), setting EXP to 0");
 
-                // Write capped EXP back to results array
-                for (int slot = 0; slot < 4; slot++)
-                {
-                    if (results->PartyMembers[slot] == (short)member)
+                    // CLEAR THE LEVEL-UP STATUS for this member
+                    for (int slot = 0; slot < 4; slot++)
                     {
-                        results->ExpGains[slot] = (uint)cappedExp;
-                        Utils.LogDebug($"[SetupResultsExp] Member {member} EXP clamped from {gainedExp} to {cappedExp}");
+                        if (results->PartyMembers[slot] == (short)member)
+                        {
+                            results->ExpGains[slot] = 0;
 
-                        break;
+                            // Clear the persona changes (level increases)
+                            (&results->PersonaChanges)[slot] = new PersonaStatChanges();
+
+                            Utils.LogDebug($"[SetupResultsExp] Cleared level-up data for {member} at slot {slot}");
+                            break;
+                        }
                     }
                 }
-
-                if (requiredExp <= currentExp + cappedExp)
+        else
                 {
-                    Utils.LogDebug($"{member} is ready to level up");
-                    results->LevelUpStatus |= 0x10; // signify that a party member is ready to level up
-                    var statChanges = new PersonaStatChanges { };
-                    GenerateLevelUpPersona(persona, &statChanges, cappedExp);
-                    _levelUps[member] = statChanges;
+                    cappedExp = CalculateCappedExp(level, gainedExp, levelCap, requiredExp, currentExp, requiredREALexp);
+                    _expGains[member] = cappedExp;
+
+                    // Write capped EXP back to results array
+                    for (int slot = 0; slot < 4; slot++)
+                    {
+                        if (results->PartyMembers[slot] == (short)member)
+                        {
+                            results->ExpGains[slot] = (uint)cappedExp;
+                            Utils.LogDebug($"[SetupResultsExp] Member {member} level {level} - EXP clamped from {gainedExp} to {cappedExp} (cap: {levelCap})");
+                            break;
+                        }
+                    }
+
+                    // Only check for level up if we're giving EXP and not at cap
+                    if (cappedExp > 0 && level < levelCap && requiredExp <= currentExp + cappedExp)
+                    {
+                        Utils.LogDebug($"{member} is ready to level up");
+                        results->LevelUpStatus |= 0x10;
+                        var statChanges = new PersonaStatChanges { };
+                        GenerateLevelUpPersona(persona, &statChanges, cappedExp);
+                        _levelUps[member] = statChanges;
+                    }
                 }
             }
 
@@ -294,66 +314,84 @@ namespace p3ppc.levelcap
             var activePersona = GetPartyMemberPersona(PartyMember.Protag);
             if (activePersona != null)
             {
-                int levelCap = GetCurrentLevelCap();
                 
                 for (short i = 0; i < 12; i++)
                 {
                     var persona = GetProtagPersona(i);
-                    if (persona == null)
-                    {
-                        _logger.WriteLine($"[SetupResultsExp] Persona pointer for {i} is null, skipping.");
-                        continue;
-                    }
+                    if (persona == null) continue;
                     var level = persona->Level;
-                    if (level >= 99 || level >= levelCap) continue;
-                    int gainedExp = (int)results->ProtagExpGains[i];
-                    int finalExpGained = 0;
 
-                    if (persona == (Persona*)0 || persona->Id == activePersona->Id)
+                    if (level >= 99 || level >= levelCap)
                     {
-                        finalExpGained = gainedExp;
+                        // Clear protag persona level-up data
+                        results->ProtagExpGains[i] = 0;
+                        (&results->ProtagPersonaChanges)[i] = new PersonaStatChanges();
+                        Utils.LogDebug($"[SetupResultsExp] Cleared level-up data for Protag Persona {i} at level cap");
                     }
                     else
                     {
-                        var skills = _getPersonaSkills(new nint(persona));
+                        int gainedExp = (int)results->ProtagExpGains[i];
+                        int finalExpGained = 0;
 
-                        bool hasGrowth1 = false;
-                        bool hasGrowth2 = false;
-                        bool hasGrowth3 = false;
-
-                        for (int skillSlot = 0; skillSlot < 8; skillSlot++)
+                        if (persona == (Persona*)0 || persona->Id == activePersona->Id)
                         {
-                            short skill = skills[skillSlot];
-                            if (skill == 0x229) hasGrowth1 = true;
-                            else if (skill == 0x22a) hasGrowth2 = true;
-                            else if (skill == 0x22b) hasGrowth3 = true;
+                            finalExpGained = gainedExp;
                         }
+                        else
+                        {
+                            var skills = _getPersonaSkills(new nint(persona));
 
-                        if (hasGrowth3) finalExpGained = gainedExp;
-                        else if (hasGrowth2) finalExpGained = (int)(gainedExp * 0.5f);
-                        else if (hasGrowth1) finalExpGained = (int)(gainedExp * 0.25f);
-                        else continue;
-                    }
+                            bool hasGrowth1 = false;
+                            bool hasGrowth2 = false;
+                            bool hasGrowth3 = false;
+
+                            for (int skillSlot = 0; skillSlot < 8; skillSlot++)
+                            {
+                                short skill = skills[skillSlot];
+                                if (skill == 0x229) hasGrowth1 = true;
+                                else if (skill == 0x22a) hasGrowth2 = true;
+                                else if (skill == 0x22b) hasGrowth3 = true;
+                            }
+
+                            if (hasGrowth3) finalExpGained = gainedExp;
+                            else if (hasGrowth2) finalExpGained = (int)(gainedExp * 0.5f);
+                            else if (hasGrowth1) finalExpGained = (int)(gainedExp * 0.25f);
+                            else continue;
+                        }
 
 
                         var currentExp = persona->Exp;
                         var requiredExp = GetPersonaRequiredExp(persona, (ushort)(level + 1));
-                    var requiredREALexp = GetPersonaRequiredExp(persona, (ushort)levelCap); // THIS SOLUTION FUCKING REEEEEEEEEEEEEEEEEEEKS
+                        var requiredREALexp = GetPersonaRequiredExp(persona, (ushort)levelCap);
 
-                    int cappedExp = CalculateCappedExp(level, (int)finalExpGained, levelCap, requiredExp, currentExp, requiredREALexp);
+                        int cappedExp;
 
-                    results->ProtagExpGains[i] = (uint)cappedExp;
-                    Utils.LogDebug($"Giving Protag Persona {i} ({persona->Id}) {gainedExp} exp");
+                        // NOW handle level cap properly
+                        if (level >= 99 || level >= levelCap)
+                        {
+                            cappedExp = 0;
+                            Utils.LogDebug($"[SetupResultsExp] Protag Persona {i} at level cap ({level} >= {levelCap}), setting EXP to 0");
+                        }
+                        else
+                        {
+                            cappedExp = CalculateCappedExp(level, finalExpGained, levelCap, requiredExp, currentExp, requiredREALexp);
+                        }
 
-                    if (requiredExp <= currentExp + cappedExp)
-                            {
-                        Utils.LogDebug($"Protag Persona {i} ({persona->Id}) is ready to level up");
-                        results->LevelUpStatus |= 8;
-                                GenerateLevelUpPersona(persona, &(&results->ProtagPersonaChanges)[i], cappedExp);
-                            }
+                        results->ProtagExpGains[i] = (uint)cappedExp;
+                        Utils.LogDebug($"[SetupResultsExp] Protag Persona {i} ({persona->Id}) level {level} - EXP clamped from {finalExpGained} to {cappedExp} (cap: {levelCap})");
+
+                        if (cappedExp > 0 && requiredExp <= currentExp + cappedExp)
+                        {
+                            Utils.LogDebug($"Protag Persona {i} ({persona->Id}) is ready to level up");
+                            results->LevelUpStatus |= 8;
+                            GenerateLevelUpPersona(persona, &(&results->ProtagPersonaChanges)[i], cappedExp);
                         }
                     }
                 }
+            }
+        }
+
+                        
         private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
         {
             _givePartyMemberExpHook.OriginalFunction(results, param_2, param_3, param_4);
@@ -396,6 +434,15 @@ namespace p3ppc.levelcap
             if (thing->State > 1)
             {
                 return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+            }
+
+            for (int i = 0; i < 4; i++)
+            {
+                if (results->PartyMembers[i] != 0)
+                {
+                    var member = (PartyMember)results->PartyMembers[i];
+                    Utils.LogDebug($"  {member}: {results->ExpGains[i]} EXP (expected from _expGains: {(_expGains.ContainsKey(member) ? _expGains[member] : "N/A")})");
+                }
             }
 
             Utils.LogDebug($"LevelUpSlot = {thing->LevelUpSlot}");
