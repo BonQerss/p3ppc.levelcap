@@ -67,7 +67,7 @@ namespace p3ppc.levelcap
         private delegate void GivePersonaExpDelegate(IntPtr persona, uint exp);
         private delegate IntPtr GetProtagPersonaDelegate(short slot);
         private delegate IntPtr GetPartyMemberPersonaDelegate(IntPtr partyMemberInfo);
-        private delegate IntPtr GetLevelDelegate(IntPtr partyMemberInfo);
+        private delegate byte GetLevelDelegate(PartyMember member);
         private delegate byte GetPersonaLevelDelegate(IntPtr persona);
         private delegate byte GetPartyMemberLevelDelegate(IntPtr partyMemberInfo);
         private delegate ushort GetNumPersonasDelegate();
@@ -157,7 +157,7 @@ namespace p3ppc.levelcap
             Utils.SigScan("E8 ?? ?? ?? ?? 45 33 D2 4C 8B D8", "GetPartyMemberLevel", address =>
             {
                 var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
-                _getLevel = _hooks.CreateWrapper<GetLevelDelegate>((long)funcAddress, out _);
+                _getPartyMemberLevel = _hooks.CreateWrapper<GetPartyMemberLevelDelegate>((long)funcAddress, out _);
                 _logger.WriteLine($"Found GetLevel at 0x{address:X}");
             });
 
@@ -169,6 +169,17 @@ namespace p3ppc.levelcap
             Utils.SigScan("40 53 48 83 EC 20 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 45 30 C0", "CalculateLevel", address =>
             {
                 _calculateLevel = _hooks.CreateWrapper<CalculateLevelDelegate>(address, out _);
+            });
+
+
+            // non functioning sigscan here, ghidra reports that the function itself is
+            // too small to get a sigscan from. getglobaladdress only works for when the
+            // function is called to the best of my understanding, and the only call
+            // is in this function seemingly. can you wrap a call in the same function
+            // you're hooking? is that a thing? i have no idea
+            Utils.SigScan("40 53 48 83 EC 20 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 45 30 C0", "GetLevel", address => 
+            {
+                _getLevel = _hooks.CreateWrapper<GetLevelDelegate>(address, out _);
             });
         }
 
@@ -305,7 +316,7 @@ namespace p3ppc.levelcap
             var activePersona = GetPartyMemberPersona(PartyMember.Protag);
             if (activePersona != null)
             {
-                
+
                 for (short i = 0; i < 12; i++)
                 {
                     var persona = GetProtagPersona(i);
@@ -380,9 +391,27 @@ namespace p3ppc.levelcap
                     }
                 }
             }
+
+
+            // Setup Protag Itself EXP
+            byte protagLevel = _getLevel(PartyMember.Protag);  // Now this works!
+            int currentProtagExp = (int)(CalculateGainedExp(protagLevel, param_2));
+            int requiredProtagExp = _getPartyMemberExp();
+            int nextLevel = _calculateLevel(currentProtagExp + requiredProtagExp);
+
+            if (protagLevel != nextLevel)
+            {
+                results->LevelUpStatus = results->LevelUpStatus | 2;
+            }
+
+            results->GainedExp = currentProtagExp;
+
+            // Basic reimplementation
+            // Needs level cap logic
+            // also needs a sigscan for _getLevel, weirdly struggling there
         }
 
-                        
+
         private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
         {
             _givePartyMemberExpHook.OriginalFunction(results, param_2, param_3, param_4);
