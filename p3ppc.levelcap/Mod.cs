@@ -247,8 +247,8 @@ namespace p3ppc.levelcap
             byte protagLevel = _getLevel(PartyMember.Protag);
             int gainedProtagExp = (int)(CalculateGainedExp(protagLevel, param_2)); // the old label here in ghidra said this was currentExp????????? but how?????????
             int currentProtagExp = 0; // i'm hella confused, the original function itself doesn't seem to get the currentExp for the protagonist                  
-            int requiredProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(protagLevel + 1)); // this is probably right, function was decompiled wrong in ghidra
-            int requiredREALProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(levelCap));
+            int requiredProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(protagLevel + 1)); // this is not right, according to ghidra the second arg is param_2????????????????
+            int requiredREALProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(levelCap)); // then what the fuck do i do here????????????
 
             int cappedProtagExp;
 
