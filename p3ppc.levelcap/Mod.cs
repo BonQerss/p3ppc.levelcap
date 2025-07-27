@@ -84,7 +84,7 @@ namespace p3ppc.levelcap
         private GetPersonaSkillsDelegate _getPersonaSkills;
         private GetLevelDelegate _getLevel;
 
-        private delegate int GetPartyMemberExpDelegate(PartyMember member, ushort level);
+        private delegate int GetPartyMemberExpDelegate(PartyMember member, astruct_2* param_2);
         private GetPartyMemberExpDelegate _getPartyMemberExp;
 
         private delegate int CalculateLevelDelegate(int totalExp);
@@ -245,10 +245,25 @@ namespace p3ppc.levelcap
             // Setup Protag Itself EXP
             // these names make no sense but apparently that's what they are in ghidra
             byte protagLevel = _getLevel(PartyMember.Protag);
+            Utils.LogDebug($"Current Protag Level is {protagLevel}");
             int gainedProtagExp = (int)(CalculateGainedExp(protagLevel, param_2)); // the old label here in ghidra said this was currentExp????????? but how?????????
+            Utils.LogDebug($"Current gainedProtagExp is {gainedProtagExp}");
             int currentProtagExp = 0; // i'm hella confused, the original function itself doesn't seem to get the currentExp for the protagonist                  
-            int requiredProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(protagLevel + 1)); // this is not right, according to ghidra the second arg is param_2????????????????
-            int requiredREALProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(levelCap)); // then what the fuck do i do here????????????
+            int requiredProtagExp = _getPartyMemberExp(PartyMember.Protag, param_2); // this is not right, according to ghidra the second arg is param_2????????????????
+            Utils.LogDebug($"Current requiredProtagExp is {requiredProtagExp}");
+            int requiredREALProtagExp = _getPartyMemberExp(PartyMember.Protag, param_2); // then what the fuck do i do here????????????
+            Utils.LogDebug($"Current requiredREALProtagExp is {requiredREALProtagExp}");
+
+            //
+            //[Level Cap] Current gainedProtagExp is 64358
+            //[Level Cap] Current requiredProtagExp is 194982
+            //[Level Cap] Current requiredREALProtagExp is 194982
+            //
+            // ok so gained is correct
+            // required seems to print currentExp???????
+            // then what the hell is getting the requiredExp amount???????????????
+            //
+
 
             //
             // this whole issue kinda stems from not understanding GetPartyMemberExp
