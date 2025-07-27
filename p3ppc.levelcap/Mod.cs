@@ -84,7 +84,7 @@ namespace p3ppc.levelcap
         private GetPersonaSkillsDelegate _getPersonaSkills;
         private GetLevelDelegate _getLevel;
 
-        private delegate int GetPartyMemberExpDelegate();
+        private delegate int GetPartyMemberExpDelegate(PartyMember member, ushort level);
         private GetPartyMemberExpDelegate _getPartyMemberExp;
 
         private delegate int CalculateLevelDelegate(int totalExp);
@@ -158,7 +158,7 @@ namespace p3ppc.levelcap
             {
                 var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
                 _getPartyMemberLevel = _hooks.CreateWrapper<GetPartyMemberLevelDelegate>((long)funcAddress, out _);
-                _logger.WriteLine($"Found GetLevel at 0x{address:X}");
+                _logger.WriteLine($"Found GetPartyMemberLevel at 0x{address:X}");
             });
 
             Utils.SigScan("48 8D 64 24 ?? 4C 89 34 24 49 C7 C6 FA 64 A4 1C", "GetPartyMemberExp", address =>
@@ -172,14 +172,13 @@ namespace p3ppc.levelcap
             });
 
 
-            // non functioning sigscan here, ghidra reports that the function itself is
-            // too small to get a sigscan from. getglobaladdress only works for when the
-            // function is called to the best of my understanding, and the only call
-            // is in this function seemingly. can you wrap a call in the same function
-            // you're hooking? is that a thing? i have no idea
-            Utils.SigScan("40 53 48 83 EC 20 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 45 30 C0", "GetLevel", address => 
+            // nevermind i forgot the function was thunked and thus had a previous one with actual calls
+            // we gucci now
+             Utils.SigScan("E8 ?? ?? ?? ?? 0F B7 CB E8 ?? ?? ?? ?? 48 8B D8 48 85 C0 75 ?? 8B 15 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 83 C2 20", "GetLevel", address => 
             {
-                _getLevel = _hooks.CreateWrapper<GetLevelDelegate>(address, out _);
+                var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
+                _getLevel = _hooks.CreateWrapper<GetLevelDelegate>((long)funcAddress, out _);
+                _logger.WriteLine($"Found GetLevel at 0x{address:X}");
             });
         }
 
@@ -243,9 +242,35 @@ namespace p3ppc.levelcap
 
             int levelCap = GetCurrentLevelCap();
 
-            //
-            // How the hell does the logic work for the protag?????????????????????????
-            //
+            // Setup Protag Itself EXP
+            // these names make no sense but apparently that's what they are in ghidra
+            byte protagLevel = _getLevel(PartyMember.Protag);
+            int gainedProtagExp = (int)(CalculateGainedExp(protagLevel, param_2)); // the old label here in ghidra said this was currentExp????????? but how?????????
+            int currentProtagExp = 0; // i'm hella confused, the original function itself doesn't seem to get the currentExp for the protagonist                  
+            int requiredProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(protagLevel + 1)); // this is probably right, function was decompiled wrong in ghidra
+            int requiredREALProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(levelCap));
+
+            int cappedProtagExp;
+
+            if (protagLevel >= 99 || protagLevel >= levelCap)
+            {
+                cappedProtagExp = 0;
+                Utils.LogDebug($"[SetupResultsExp] Protag at level cap ({protagLevel} >= {levelCap}), setting EXP to 0");
+
+                results->GainedExp = cappedProtagExp; 
+            }
+            else
+            {
+                cappedProtagExp = CalculateCappedExp(protagLevel, gainedProtagExp, levelCap, requiredProtagExp, currentProtagExp, requiredREALProtagExp);
+                results->GainedExp = cappedProtagExp;
+            }
+
+                int nextLevel = _calculateLevel(currentProtagExp + requiredProtagExp);
+
+            if (protagLevel != nextLevel)
+            {
+                results->LevelUpStatus = results->LevelUpStatus | 2;
+            }
 
             // Setup Party Exp
             for (PartyMember member = PartyMember.Yukari; member <= PartyMember.Koromaru; member++)
@@ -393,22 +418,7 @@ namespace p3ppc.levelcap
             }
 
 
-            // Setup Protag Itself EXP
-            byte protagLevel = _getLevel(PartyMember.Protag);  // Now this works!
-            int currentProtagExp = (int)(CalculateGainedExp(protagLevel, param_2));
-            int requiredProtagExp = _getPartyMemberExp();
-            int nextLevel = _calculateLevel(currentProtagExp + requiredProtagExp);
-
-            if (protagLevel != nextLevel)
-            {
-                results->LevelUpStatus = results->LevelUpStatus | 2;
-            }
-
-            results->GainedExp = currentProtagExp;
-
-            // Basic reimplementation
-            // Needs level cap logic
-            // also needs a sigscan for _getLevel, weirdly struggling there
+            
         }
 
 
