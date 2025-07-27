@@ -6,15 +6,13 @@ Add in level cap logic for protagonist itself
 
 Test edge cases where party member levels vary in distance
 
-Fix the comparison value for all party member level ups being the same
-
 ## How can I contribute?
 
-Make a fork, make your changes, and open a pull request! We're open to suggestions and ideas.
+Make a fork, make your changes, and open a pull request! I'm open to feedback.
 
 ## Credits
 As of 7/26/2025
 
-AnimatedSwine37 
+AnimatedSwine37 (p3ppc.expShare)
 
-DeathChaos
+DeathChaos (p4gpc.levelcap)

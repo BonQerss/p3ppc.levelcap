@@ -250,6 +250,16 @@ namespace p3ppc.levelcap
             int requiredProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(protagLevel + 1)); // this is not right, according to ghidra the second arg is param_2????????????????
             int requiredREALProtagExp = _getPartyMemberExp(PartyMember.Protag, (ushort)(levelCap)); // then what the fuck do i do here????????????
 
+            //
+            // this whole issue kinda stems from not understanding GetPartyMemberExp
+            // apparently the second param is supposed to be param_2 from here, but
+            // i can't figure out why that'd be the case. attempting to look at the
+            // code in ghidra shows some undecompiled lock unlock nonsense. i'm
+            // trying to figure out how to make it actually decompile and look right
+            // but struggling. how the hell did swine get that label in the first 
+            // place???
+            //
+
             int cappedProtagExp;
 
             if (protagLevel >= 99 || protagLevel >= levelCap)
