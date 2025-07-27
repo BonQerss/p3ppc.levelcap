@@ -243,37 +243,17 @@ namespace p3ppc.levelcap
             int levelCap = GetCurrentLevelCap();
 
             // Setup Protag Itself EXP
-            // these names make no sense but apparently that's what they are in ghidra
             byte protagLevel = _getLevel(PartyMember.Protag);
             Utils.LogDebug($"Current Protag Level is {protagLevel}");
-            int gainedProtagExp = (int)(CalculateGainedExp(protagLevel, param_2)); // the old label here in ghidra said this was currentExp????????? but how?????????
+            int gainedProtagExp = (int)(CalculateGainedExp(protagLevel, param_2));
             Utils.LogDebug($"Current gainedProtagExp is {gainedProtagExp}");
-            int currentProtagExp = 0; // i'm hella confused, the original function itself doesn't seem to get the currentExp for the protagonist                  
-            int requiredProtagExp = _getPartyMemberExp(PartyMember.Protag, param_2); // this is not right, according to ghidra the second arg is param_2????????????????
-            Utils.LogDebug($"Current requiredProtagExp is {requiredProtagExp}");
-            int requiredREALProtagExp = _getPartyMemberExp(PartyMember.Protag, param_2); // then what the fuck do i do here????????????
-            Utils.LogDebug($"Current requiredREALProtagExp is {requiredREALProtagExp}");
-
-            //
-            //[Level Cap] Current gainedProtagExp is 64358
-            //[Level Cap] Current requiredProtagExp is 194982
-            //[Level Cap] Current requiredREALProtagExp is 194982
-            //
-            // ok so gained is correct
-            // required seems to print currentExp???????
-            // then what the hell is getting the requiredExp amount???????????????
-            //
+            int currentProtagExp = _getPartyMemberExp(PartyMember.Protag, param_2);               
+            Utils.LogDebug($"Current currentProtagExp is {currentProtagExp}");
 
 
-            //
-            // this whole issue kinda stems from not understanding GetPartyMemberExp
-            // apparently the second param is supposed to be param_2 from here, but
-            // i can't figure out why that'd be the case. attempting to look at the
-            // code in ghidra shows some undecompiled lock unlock nonsense. i'm
-            // trying to figure out how to make it actually decompile and look right
-            // but struggling. how the hell did swine get that label in the first 
-            // place???
-            //
+            // 64358 + 194982
+
+            
 
             int cappedProtagExp;
 
@@ -281,18 +261,45 @@ namespace p3ppc.levelcap
             {
                 cappedProtagExp = 0;
                 Utils.LogDebug($"[SetupResultsExp] Protag at level cap ({protagLevel} >= {levelCap}), setting EXP to 0");
-
                 results->GainedExp = cappedProtagExp; 
             }
             else
             {
-                cappedProtagExp = CalculateCappedExp(protagLevel, gainedProtagExp, levelCap, requiredProtagExp, currentProtagExp, requiredREALProtagExp);
+                int projectedLevel = _calculateLevel(currentProtagExp + gainedProtagExp);
+
+                if (projectedLevel > levelCap)
+                {
+                    int maxExpForCapLevel = currentProtagExp;
+                    for (int testExp = currentProtagExp; testExp <= currentProtagExp + gainedProtagExp; testExp++)
+                    {
+                        if (_calculateLevel(testExp) == levelCap)
+                        {
+                            maxExpForCapLevel = testExp;
+                        }
+                        else if (_calculateLevel(testExp) > levelCap)
+                        {
+                            break; // Stop when we would exceed the cap
+                        }
+                    }
+
+
+                            // Cap the gained exp to not exceed the level cap
+                            cappedProtagExp = Math.Max(0, maxExpForCapLevel - currentProtagExp);
+                    Utils.LogDebug($"[SetupResultsExp] Protag would reach level {projectedLevel}, capping exp from {gainedProtagExp} to {cappedProtagExp} to stay at level {levelCap}");
+                }
+                else
+                {
+                    cappedProtagExp = gainedProtagExp;
+                    Utils.LogDebug($"[SetupResultsExp] Protag will reach level {projectedLevel}, no capping needed fr fr."); // you gotta let me have ONE
+                }
+
                 results->GainedExp = cappedProtagExp;
             }
 
-                int nextLevel = _calculateLevel(currentProtagExp + requiredProtagExp);
 
-            if (protagLevel != nextLevel)
+
+            int finalLevel = _calculateLevel(currentProtagExp + cappedProtagExp);
+            if (protagLevel != finalLevel)
             {
                 results->LevelUpStatus = results->LevelUpStatus | 2;
             }
