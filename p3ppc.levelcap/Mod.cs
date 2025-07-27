@@ -293,10 +293,10 @@ namespace p3ppc.levelcap
                     Utils.LogDebug($"[SetupResultsExp] Protag will reach level {projectedLevel}, no capping needed fr fr."); // you gotta let me have ONE
                 }
 
-                results->GainedExp = cappedProtagExp;
+                
             }
 
-
+            results->GainedExp = cappedProtagExp;  // this breaks shit
 
             int finalLevel = _calculateLevel(currentProtagExp + cappedProtagExp);
             if (protagLevel != finalLevel)
