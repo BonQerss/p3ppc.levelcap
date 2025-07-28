@@ -261,7 +261,6 @@ namespace p3ppc.levelcap
             {
                 cappedProtagExp = 0;
                 Utils.LogDebug($"[SetupResultsExp] Protag at level cap ({protagLevel} >= {levelCap}), setting EXP to 0");
-                results->GainedExp = cappedProtagExp; 
             }
             else
             {
@@ -293,10 +292,15 @@ namespace p3ppc.levelcap
                     Utils.LogDebug($"[SetupResultsExp] Protag will reach level {projectedLevel}, no capping needed fr fr."); // you gotta let me have ONE
                 }
 
-                
+
             }
 
             results->GainedExp = cappedProtagExp;  // this breaks shit
+
+            // exp amount limited is also 1 exp below the level cap level + 1, instead of just the level itself
+            // need to fix that later
+            // exp is also limited for all party members after this, since i guess the amount the protag earns is what determines everyone else's exp???????????
+            // need to figure out how to separate the exp earned here from everyone else's
 
             int finalLevel = _calculateLevel(currentProtagExp + cappedProtagExp);
             if (protagLevel != finalLevel)
