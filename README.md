@@ -2,11 +2,7 @@
 
 ## TODOs
 
-Fix protagonist level cap logic capping exp to 1 exp before next level after level cap instead of at the beginning of the level cap
-
-Fix protagonist exp amount being applied to everyone else
-
-Test edge cases where party member levels vary in distance
+Publish!
 
 ## How can I contribute?
 
