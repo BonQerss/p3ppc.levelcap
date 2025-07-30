@@ -1,19 +1,18 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
-using System.Reflection.Emit;
-using System.Reflection.Metadata.Ecma335;
 using System.Runtime.InteropServices;
-using p3ppc.expShare;
-using p3ppc.expShare.NuGet.templates.defaultPlus;
-using p3ppc.levelcap.Configuration;
-using p3ppc.levelcap.Template;
 using Reloaded.Hooks.Definitions;
-using Reloaded.Hooks.ReloadedII.Interfaces;
 using Reloaded.Mod.Interfaces;
-using Reloaded.Mod.Interfaces.Structs;
+using p3ppc.levelcap.Template;
+using Reloaded.Hooks.ReloadedII.Interfaces;
+using p3ppc.levelcap.Configuration;
 using static p3ppc.expShare.Native;
+using Reloaded.Mod.Interfaces.Structs;
 using IReloadedHooks = Reloaded.Hooks.ReloadedII.Interfaces.IReloadedHooks;
+using p3ppc.expShare.NuGet.templates.defaultPlus;
+using p3ppc.expShare;
+using System.ComponentModel.Design;
+using System.Reflection.Metadata.Ecma335;
 
 namespace p3ppc.levelcap
 {/// <summary>
@@ -67,7 +66,6 @@ namespace p3ppc.levelcap
         private delegate void GivePersonaExpDelegate(IntPtr persona, uint exp);
         private delegate IntPtr GetProtagPersonaDelegate(short slot);
         private delegate IntPtr GetPartyMemberPersonaDelegate(IntPtr partyMemberInfo);
-        private delegate byte GetLevelDelegate(PartyMember member);
         private delegate byte GetPersonaLevelDelegate(IntPtr persona);
         private delegate byte GetPartyMemberLevelDelegate(IntPtr partyMemberInfo);
         private delegate ushort GetNumPersonasDelegate();
@@ -82,13 +80,15 @@ namespace p3ppc.levelcap
         private GetPartyMemberLevelDelegate _getPartyMemberLevel;
         private GetNumPersonasDelegate _getNumPersonas;
         private GetPersonaSkillsDelegate _getPersonaSkills;
-        private GetLevelDelegate _getLevel;
 
-        private delegate int GetPartyMemberExpDelegate(PartyMember member, astruct_2* param_2);
-        private GetPartyMemberExpDelegate _getPartyMemberExp;
+        private delegate int GetLevelDelegate(PartyMember member);
+        private GetLevelDelegate _getLevel;
 
         private delegate int CalculateLevelDelegate(int totalExp);
         private CalculateLevelDelegate _calculateLevel;
+
+        private delegate int GetPartyMemberExpDelegate(PartyMember member, astruct_2* param_2);
+        private GetPartyMemberExpDelegate _getPartyMemberExp;
 
         private SortedDictionary<int, int> _levelCaps => new SortedDictionary<int, int>
         {
@@ -154,31 +154,22 @@ namespace p3ppc.levelcap
                 _logger.WriteLine($"Found GetPersonaSkills at 0x{address:X}");
             });
 
-            Utils.SigScan("E8 ?? ?? ?? ?? 45 33 D2 4C 8B D8", "GetPartyMemberLevel", address =>
-            {
-                var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
-                _getPartyMemberLevel = _hooks.CreateWrapper<GetPartyMemberLevelDelegate>((long)funcAddress, out _);
-                _logger.WriteLine($"Found GetPartyMemberLevel at 0x{address:X}");
-            });
-
-            Utils.SigScan("48 8D 64 24 ?? 4C 89 34 24 49 C7 C6 FA 64 A4 1C", "GetPartyMemberExp", address =>
-            {
-                _getPartyMemberExp = _hooks.CreateWrapper<GetPartyMemberExpDelegate>(address, out _);
-            });
-
             Utils.SigScan("40 53 48 83 EC 20 89 CB 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 45 30 C0", "CalculateLevel", address =>
             {
                 _calculateLevel = _hooks.CreateWrapper<CalculateLevelDelegate>(address, out _);
             });
 
-
-            // nevermind i forgot the function was thunked and thus had a previous one with actual calls
-            // we gucci now
-             Utils.SigScan("E8 ?? ?? ?? ?? 0F B7 CB E8 ?? ?? ?? ?? 48 8B D8 48 85 C0 75 ?? 8B 15 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 83 C2 20", "GetLevel", address => 
+            Utils.SigScan("E8 ?? ?? ?? ?? 0F B7 CB E8 ?? ?? ?? ?? 48 8B D8 48 85 C0 75 ?? 8B 15 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? 83 C2 20", "GetLevel", address =>
             {
                 var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
                 _getLevel = _hooks.CreateWrapper<GetLevelDelegate>((long)funcAddress, out _);
                 _logger.WriteLine($"Found GetLevel at 0x{address:X}");
+
+            });
+
+            Utils.SigScan("48 8D 64 24 ?? 4C 89 34 24 49 C7 C6 FA 64 A4 1C", "GetPartyMemberExp", address =>
+            {
+                _getPartyMemberExp = _hooks.CreateWrapper<GetPartyMemberExpDelegate>(address, out _);
             });
         }
 
@@ -211,6 +202,7 @@ namespace p3ppc.levelcap
             return previousCap;
         }
 
+
         private int CalculateCappedExp(int currentLevel, int gainedExp, int levelCap, int requiredExp, int currentExp, int totalExpForLevelCap)
         {
             if (currentLevel >= levelCap)
@@ -239,21 +231,18 @@ namespace p3ppc.levelcap
             {
                 _numAvailable = GetAvailableParty(party);
             }
+            _setupExpHook.OriginalFunction(results, param_2);
 
             int levelCap = GetCurrentLevelCap();
 
             // Setup Protag Itself EXP
-            byte protagLevel = _getLevel(PartyMember.Protag);
+            // these names make no sense but apparently that's what they are in ghidra
+            int protagLevel = _getLevel(PartyMember.Protag);
             Utils.LogDebug($"Current Protag Level is {protagLevel}");
             int gainedProtagExp = (int)(CalculateGainedExp(protagLevel, param_2));
             Utils.LogDebug($"Current gainedProtagExp is {gainedProtagExp}");
-            int currentProtagExp = _getPartyMemberExp(PartyMember.Protag, param_2);               
+            int currentProtagExp = _getPartyMemberExp(PartyMember.Protag, param_2);
             Utils.LogDebug($"Current currentProtagExp is {currentProtagExp}");
-
-
-            // 64358 + 194982
-
-            
 
             int cappedProtagExp;
 
@@ -261,6 +250,7 @@ namespace p3ppc.levelcap
             {
                 cappedProtagExp = 0;
                 Utils.LogDebug($"[SetupResultsExp] Protag at level cap ({protagLevel} >= {levelCap}), setting EXP to 0");
+                results->GainedExp = cappedProtagExp;
             }
             else
             {
@@ -282,8 +272,8 @@ namespace p3ppc.levelcap
                     }
 
 
-                            // Cap the gained exp to not exceed the level cap
-                            cappedProtagExp = Math.Max(0, maxExpForCapLevel - currentProtagExp);
+                    // Cap the gained exp to not exceed the level cap
+                    cappedProtagExp = Math.Max(0, maxExpForCapLevel - currentProtagExp);
                     Utils.LogDebug($"[SetupResultsExp] Protag would reach level {projectedLevel}, capping exp from {gainedProtagExp} to {cappedProtagExp} to stay at level {levelCap}");
                 }
                 else
@@ -292,21 +282,17 @@ namespace p3ppc.levelcap
                     Utils.LogDebug($"[SetupResultsExp] Protag will reach level {projectedLevel}, no capping needed fr fr."); // you gotta let me have ONE
                 }
 
-
+                results->GainedExp = cappedProtagExp;
             }
 
-            results->GainedExp = cappedProtagExp;  // this breaks shit
 
-            // exp amount limited is also 1 exp below the level cap level + 1, instead of just the level itself
-            // need to fix that later
-            // exp is also limited for all party members after this, since i guess the amount the protag earns is what determines everyone else's exp???????????
-            // need to figure out how to separate the exp earned here from everyone else's
 
             int finalLevel = _calculateLevel(currentProtagExp + cappedProtagExp);
             if (protagLevel != finalLevel)
             {
                 results->LevelUpStatus = results->LevelUpStatus | 2;
             }
+
 
             // Setup Party Exp
             for (PartyMember member = PartyMember.Yukari; member <= PartyMember.Koromaru; member++)
@@ -326,7 +312,7 @@ namespace p3ppc.levelcap
                 int cappedExp;
 
                 if (level >= 99 || level >= levelCap)
-                {
+        {
                     cappedExp = 0;
                     Utils.LogDebug($"[SetupResultsExp] Member {member} at level cap ({level} >= {levelCap}), setting EXP to 0");
 
@@ -345,7 +331,7 @@ namespace p3ppc.levelcap
                         }
                     }
                 }
-                else
+        else
                 {
                     cappedExp = CalculateCappedExp(level, gainedExp, levelCap, requiredExp, currentExp, requiredREALexp);
                     _expGains[member] = cappedExp;
@@ -377,7 +363,7 @@ namespace p3ppc.levelcap
             var activePersona = GetPartyMemberPersona(PartyMember.Protag);
             if (activePersona != null)
             {
-
+                
                 for (short i = 0; i < 12; i++)
                 {
                     var persona = GetProtagPersona(i);
@@ -452,12 +438,9 @@ namespace p3ppc.levelcap
                     }
                 }
             }
-
-
-            
         }
 
-
+                        
         private void GivePartyMemberExp(BattleResults* results, nuint param_2, nuint param_3, nuint param_4)
         {
             _givePartyMemberExpHook.OriginalFunction(results, param_2, param_3, param_4);
