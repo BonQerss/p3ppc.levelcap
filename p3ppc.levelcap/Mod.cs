@@ -167,10 +167,13 @@ namespace p3ppc.levelcap
 
             });
 
-            Utils.SigScan("48 8D 64 24 ?? 4C 89 34 24 49 C7 C6 FA 64 A4 1C", "GetPartyMemberExp", address =>
+            Utils.SigScan("E8 ?? ?? ?? ?? 41 8B CF 89 44 24 ??", "GetPartyMemberExp",address =>
             {
-                _getPartyMemberExp = _hooks.CreateWrapper<GetPartyMemberExpDelegate>(address, out _);
+                var funcAddress = Utils.GetGlobalAddress((nint)(address + 1));
+                _getPartyMemberExp = _hooks.CreateWrapper<GetPartyMemberExpDelegate>((long)funcAddress, out _);
+                _logger.WriteLine($"Found GetPartyMemberExp at 0x{funcAddress:X}");
             });
+
         }
 
         private int GetCurrentLevelCap()
