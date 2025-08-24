@@ -1,19 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using Reloaded.Hooks.Definitions;
+﻿using Reloaded.Hooks.Definitions;
 using Reloaded.Mod.Interfaces;
 using p3ppc.levelcap.Template;
-using Reloaded.Hooks.ReloadedII.Interfaces;
 using p3ppc.levelcap.Configuration;
 using static p3ppc.expShare.Native;
-using Reloaded.Mod.Interfaces.Structs;
 using IReloadedHooks = Reloaded.Hooks.ReloadedII.Interfaces.IReloadedHooks;
 using p3ppc.expShare.NuGet.templates.defaultPlus;
 using p3ppc.expShare;
-using System.ComponentModel.Design;
-using System.Reflection.Metadata.Ecma335;
-using System.Linq;
 
 namespace p3ppc.levelcap
 {
@@ -59,7 +51,6 @@ namespace p3ppc.levelcap
         private delegate int GetTotalDayDelegate();
         private GetTotalDayDelegate _getTotalDay;
 
-        // Thread-safe collections with locks
         private readonly Dictionary<PartyMember, int> _expGains = new();
         private readonly Dictionary<PartyMember, PersonaStatChanges> _levelUps = new();
         private readonly object _dictionaryLock = new object();
@@ -99,11 +90,11 @@ namespace p3ppc.levelcap
             { 0x26, _configuration.May9Cap },
             { 0x44, _configuration.June8Cap },
             { 0x61, _configuration.July7Cap },
-            { 0x79, _configuration.Aug6Cap },
-            { 0x8F, _configuration.Sep5Cap },
-            { 0x9D, _configuration.Oct4Cap },
-            { 0xE1, _configuration.Nov3Cap },
-            { 0xF4, _configuration.Nov22Cap },
+            { 0x7F, _configuration.Aug6Cap },
+            { 0x8D, _configuration.Sep5Cap },
+            { 0xBA, _configuration.Oct4Cap },
+            { 0xD8, _configuration.Nov3Cap },
+            { 0xEB, _configuration.Nov22Cap },
             { 0x131, _configuration.January31Cap }
         };
 
@@ -583,24 +574,12 @@ namespace p3ppc.levelcap
                     return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
                 }
 
-                for (int i = 0; i < 4; i++)
-                {
-                    if (results->PartyMembers[i] != 0)
-                    {
-                        var member = (PartyMember)results->PartyMembers[i];
-                        int expectedExp;
-                        lock (_dictionaryLock)
-                        {
-                            _expGains.TryGetValue(member, out expectedExp);
-                        }
-                        Utils.LogDebug($"  {member}: {results->ExpGains[i]} EXP (expected from _expGains: {expectedExp})");
-                    }
-                }
-
                 Utils.LogDebug($"LevelUpSlot = {thing->LevelUpSlot}");
                 for (int i = 0; i < 4; i++)
                 {
-                    Utils.LogDebug($"Slot {i} is {(PartyMember)results->PartyMembers[i]} who has {(&results->PersonaChanges)[i].LevelIncrease} level increases and {results->ExpGains[i]} exp gained.");
+                    Utils.LogDebug($"Slot {i} is {(PartyMember)results->PartyMembers[i]} " +
+                                   $"who has {(&results->PersonaChanges)[i].LevelIncrease} level increases " +
+                                   $"and {results->ExpGains[i]} exp gained.");
                 }
 
                 // Check if we have custom level-ups to process
@@ -651,27 +630,24 @@ namespace p3ppc.levelcap
                     var member = levelUpPair.Value.Key;
                     var statChanges = levelUpPair.Value.Value;
 
-                    // Bounds check before array access
-                    if (results->PartyMembers != null)
-                    {
-                        // Use slot 0 for our custom level-up
-                        results->PartyMembers[0] = (short)member;
-                        results->ExpGains[0] = (uint)expGained;
-                        (&results->PersonaChanges)[0] = statChanges;
+                    // Put our custom level-up into slot 0 only
+                    results->PartyMembers[0] = (short)member;
+                    results->ExpGains[0] = (uint)expGained;
+                    (&results->PersonaChanges)[0] = statChanges;
 
-                        // Clear other slots to prevent interference
-                        for (int i = 1; i < 4; i++)
-                        {
-                            results->PartyMembers[i] = 0;
-                            (&results->PersonaChanges)[i] = new PersonaStatChanges();
-                            results->ExpGains[i] = 0;
-                        }
+                    // Clear other slots to avoid duplication
+                    for (int i = 1; i < 4; i++)
+                    {
+                        results->PartyMembers[i] = 0;
+                        (&results->PersonaChanges)[i] = new PersonaStatChanges();
+                        results->ExpGains[i] = 0;
                     }
 
-                    // Reset to process this level-up
+
+                    // Reset slot pointer so game shows the level-up menu
                     thing->LevelUpSlot = 0;
 
-                    Utils.LogDebug($"Leveling up {member}");
+                    Utils.LogDebug($"[CustomLevelUp] Processing custom level-up for {member}");
 
                     lock (_dictionaryLock)
                     {
@@ -682,20 +658,21 @@ namespace p3ppc.levelcap
                     _isProcessingLevelUps = true;
                     var result = _levelUpPartyMemberHook.OriginalFunction(resultsThing);
                     _isProcessingLevelUps = false;
+
                     return result;
                 }
 
-                // No more level-ups to process
-                return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
+                // If we had custom level-ups, but they’re all done — stop here
+                Utils.LogDebug("[CustomLevelUp] No more custom level-ups to process, exiting cleanly.");
+                return 0; // ✅ Don’t fall back into original again
             }
             catch (Exception ex)
             {
                 _logger.WriteLine($"[LevelUpPartyMember] Critical error: {ex.Message}");
-                _isProcessingLevelUps = false; // Reset flag on error
+                _isProcessingLevelUps = false;
                 return _levelUpPartyMemberHook.OriginalFunction(resultsThing);
             }
         }
-
         private delegate void SetupResultsExpDelegate(BattleResults* results, astruct_2* param_2);
         private delegate void GivePartyMemberExpDelegate(BattleResults* results, nuint param_2, nuint param_3, nuint param_4);
         private delegate nuint LevelUpPartyMemberDelegate(BattleResultsThing* results);
